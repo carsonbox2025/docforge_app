@@ -5,17 +5,18 @@ export '../../../../shared/models/export_format.dart';
 
 /// 文档类型枚举
 enum DocType {
-  contract('contract', '合同', Icons.description_outlined),
-  bid('bid', '标书', Icons.bar_chart_outlined),
-  official('official', '公文', Icons.account_balance_outlined),
-  resume('resume', '简历', Icons.person_outline),
-  paper('paper', '论文', Icons.menu_book_outlined),
-  report('report', '报告', Icons.insert_chart_outlined),
-  minutes('minutes', '纪要', Icons.groups_outlined),
-  proposal('proposal', '方案', Icons.computer_outlined);
+  contract('contract', 'tpl_contract_tech', '合同', Icons.description_outlined),
+  bid('bid', 'tpl_bid_technical', '标书', Icons.bar_chart_outlined),
+  official('official', 'tpl_official_gbt9704', '公文', Icons.account_balance_outlined),
+  resume('resume', 'tpl_resume_standard', '简历', Icons.person_outline),
+  paper('paper', 'tpl_paper_thesis', '论文', Icons.menu_book_outlined),
+  report('report', 'tpl_report_annual', '报告', Icons.insert_chart_outlined),
+  minutes('minutes', 'tpl_minutes_meeting', '纪要', Icons.groups_outlined),
+  proposal('proposal', 'tpl_report_annual', '方案', Icons.computer_outlined);
 
-  const DocType(this.code, this.label, this.icon);
+  const DocType(this.code, this.defaultTemplateId, this.label, this.icon);
   final String code;
+  final String defaultTemplateId;
   final String label;
   final IconData icon;
 }
@@ -49,23 +50,24 @@ enum StepStatus { done, active, pending }
 
 /// 生成请求
 class GenerateRequest {
-  final DocType docType;
+  final String templateId;
   final String content;
   final DocLanguage language;
+  final String? title;
   final bool outlineOnly;
 
   const GenerateRequest({
-    required this.docType,
+    required this.templateId,
     required this.content,
     required this.language,
+    this.title,
     this.outlineOnly = false,
   });
 
   Map<String, dynamic> toJson() => {
-        'doc_type': docType.code,
-        'content': content,
-        'language': language.code,
-        'outline_only': outlineOnly,
+        'template_id': templateId,
+        'user_input': {'content': content, 'language': language.code},
+        if (title != null) 'title': title,
       };
 }
 

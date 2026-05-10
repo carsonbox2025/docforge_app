@@ -43,7 +43,7 @@ class TemplateColorScheme {
 
 /// 模板模型
 class Template {
-  final int id;
+  final String id;
   final String name;
   final TemplateCategory category;
   final int documentCount;

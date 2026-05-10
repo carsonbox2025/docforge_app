@@ -3,10 +3,12 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../data/models/generate_models.dart';
 import '../../domain/providers/generate_provider.dart';
+import '../../../../shared/models/dsl/document_block.dart';
 import '../../../../shared/widgets/feature_header.dart';
+import '../../../../shared/widgets/blocks/block_renderer.dart';
+import '../../../../shared/utils/chapter_numbering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Stage 3: 审校/导出页
 class ReviewStage extends ConsumerWidget {
   const ReviewStage({super.key});
 
@@ -14,28 +16,22 @@ class ReviewStage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(generateProvider);
     final notifier = ref.read(generateProvider.notifier);
-    final result = state.result;
+    final docResult = state.documentResult;
+
+    final title = docResult?.documentTitle ?? state.selectedType.label;
+    final totalWords = docResult?.chapters.fold(0, (sum, ch) => sum + ch.wordCount) ?? 0;
+    final chapterCount = docResult?.chapters.length ?? state.outline.length;
 
     return Column(
       children: [
-        // 绿色头部
         FeatureHeader(
           color: AppColors.success,
           title: '生成完成',
-          subtitle: '${state.result?.title ?? ''} · 共 ${state.result?.chapterCount ?? 0} 章节 · 约 ${state.result?.wordCount ?? 0} 字',
+          subtitle: '$title · 共 $chapterCount 章节 · 约 $totalWords 字',
           showBackButton: true,
           onBack: () => notifier.backToGenerating(),
         ),
-        // 步骤指示器
         _buildSteps(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-          child: Text(
-            '第三步 · 校审与导出',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
-          ),
-        ),
         // 内容区
         Expanded(
           child: SingleChildScrollView(
@@ -43,35 +39,23 @@ class ReviewStage extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 合规校审标题
+                // 文档预览
                 const Padding(
                   padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: Text(
-                    '合规校审',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text),
-                  ),
+                  child: Text('文档预览', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text)),
                 ),
-                // 审校摘要 badges
-                if (result != null) _buildSummaryBadges(result),
-                // 审校发现列表
-                if (result != null)
-                  ...result.findings.map((f) => _buildReviewCard(f)),
-                // 导出格式标题
+                _buildDocumentPreview(state),
+                // 导出格式
                 const Padding(
                   padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: Text(
-                    '选择导出格式',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text),
-                  ),
+                  child: Text('选择导出格式', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text)),
                 ),
-                // 导出格式选择
                 _buildFormatGrid(state, notifier),
                 // 操作按钮
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: Row(
                     children: [
-                      // 重新编辑 (flex:1)
                       Expanded(
                         child: SizedBox(
                           height: 48,
@@ -81,9 +65,7 @@ class ReviewStage extends ConsumerWidget {
                               backgroundColor: AppColors.surface,
                               foregroundColor: AppColors.text,
                               side: const BorderSide(color: AppColors.border),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(AppRadius.md),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                             ),
                             child: const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -97,7 +79,6 @@ class ReviewStage extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // 导出文档 (flex:2)
                       Expanded(
                         flex: 2,
                         child: SizedBox(
@@ -107,9 +88,7 @@ class ReviewStage extends ConsumerWidget {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(AppRadius.md),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                               elevation: 0,
                             ),
                             child: const Row(
@@ -140,10 +119,8 @@ class ReviewStage extends ConsumerWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _stepDot(StepStatus.done),
-          _stepLine(true),
-          _stepDot(StepStatus.done),
-          _stepLine(true),
+          _stepDot(StepStatus.done), _stepLine(true),
+          _stepDot(StepStatus.done), _stepLine(true),
           _stepDot(StepStatus.active),
         ],
       ),
@@ -151,119 +128,153 @@ class ReviewStage extends ConsumerWidget {
   }
 
   Widget _stepDot(StepStatus status) {
-    Color color;
-    switch (status) {
-      case StepStatus.done:
-        color = AppColors.success;
-      case StepStatus.active:
-        color = AppColors.primary;
-      case StepStatus.pending:
-        color = AppColors.border;
-    }
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
+    final color = switch (status) {
+      StepStatus.done => AppColors.success,
+      StepStatus.active => AppColors.primary,
+      StepStatus.pending => AppColors.border,
+    };
+    return Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
   }
 
   Widget _stepLine(bool done) {
-    return Container(
-      width: 32,
-      height: 2,
-      color: done ? AppColors.success : AppColors.border,
-    );
+    return Container(width: 32, height: 2, color: done ? AppColors.success : AppColors.border);
   }
 
-  Widget _buildSummaryBadges(GenerateResult result) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Wrap(
-        spacing: 4,
-        children: [
-          if (result.passCount > 0) _badge('${result.passCount} 通过', AppColors.success, AppColors.successBg),
-          if (result.warnCount > 0) _badge('${result.warnCount} 警告', AppColors.warn, AppColors.warnBg),
-          if (result.errorCount > 0) _badge('${result.errorCount} 错误', AppColors.error, AppColors.errorBg),
-          if (result.infoCount > 0) _badge('${result.infoCount} 建议', AppColors.info, AppColors.infoBg),
-        ],
-      ),
-    );
+  Widget _buildDocumentPreview(GenerateState state) {
+    final docResult = state.documentResult;
+
+    // 优先用 docResult（agent 模式完整结果）
+    if (docResult != null && docResult.chapters.isNotEmpty) {
+      return _buildFromDocResult(docResult);
+    }
+
+    // fallback：从 currentBlocks（流式阶段累积）
+    if (state.currentBlocks.isNotEmpty) {
+      return _buildFromCurrentBlocks(state);
+    }
+
+    // 旧版纯文本 fallback
+    if (state.generatedContent.isNotEmpty) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Text(
+          state.generatedContent,
+          style: const TextStyle(fontSize: 13, color: AppColors.text, height: 1.8),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
-  Widget _badge(String text, Color color, Color bgColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(6)),
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
-      ),
-    );
-  }
+  Widget _buildFromDocResult(DocumentResult result) {
+    final List<Widget> widgets = [];
 
-  Widget _buildReviewCard(ReviewFinding finding) {
-    Color iconBg;
-    IconData icon;
-    switch (finding.level) {
-      case ReviewLevel.pass:
-        iconBg = AppColors.success;
-        icon = Icons.check;
-      case ReviewLevel.warn:
-        iconBg = AppColors.warn;
-        icon = Icons.priority_high;
-      case ReviewLevel.error:
-        iconBg = AppColors.error;
-        icon = Icons.close;
-      case ReviewLevel.info:
-        iconBg = AppColors.info;
-        icon = Icons.info_outline;
+    if (result.documentTitle.isNotEmpty) {
+      widgets.add(Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Text(
+          result.documentTitle,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.text),
+        ),
+      ));
+    }
+
+    int mainIdx = 0;
+    for (final chapter in result.chapters) {
+      final parsed = parseChapterId(chapter.chapterId);
+      final isSub = parsed?.sub != null;
+      if (!isSub) mainIdx++;
+      final chNum = isSub ? '${parsed!.top}.${parsed.sub}' : toChineseNum(mainIdx);
+      final cleanTitle = stripTitleNumber(chapter.title);
+
+      widgets.add(Padding(
+        padding: EdgeInsets.only(top: widgets.isEmpty ? 0 : 16, bottom: 8),
+        child: isSub
+            ? Text('$chNum $cleanTitle', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.text))
+            : Text('$chNum、$cleanTitle', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+      ));
+
+      int h3Counter = 0;
+      int h4Counter = 0;
+
+      for (final block in chapter.blocks) {
+        if (block.type == BlockType.heading) {
+          final level = block.level ?? 2;
+          if (level == 3) { h3Counter++; h4Counter = 0; }
+          if (level == 4) h4Counter++;
+        }
+        // 跳过与章节标题匹配的 heading
+        if (block.type == BlockType.heading) {
+          final headingText = block.text ?? '';
+          if (stripHeadingNumber(headingText).trim() == cleanTitle) continue;
+        }
+
+        widgets.add(BlockRenderer(
+          block: block,
+          chapterIndex: mainIdx,
+          h3Counter: h3Counter,
+          h4Counter: h4Counter,
+        ));
+      }
     }
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 图标
-          Container(
-            width: 20,
-            height: 20,
-            margin: const EdgeInsets.only(top: 1),
-            decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
-            child: Icon(icon, size: 12, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          // 文字
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  finding.message,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.text, height: 1.5),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  finding.location,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textMuted),
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: widgets),
+    );
+  }
+
+  Widget _buildFromCurrentBlocks(GenerateState state) {
+    final List<Widget> widgets = [];
+    int mainIdx = 0;
+
+    for (int oi = 0; oi < state.outline.length; oi++) {
+      final item = state.outline[oi];
+      final blocks = state.currentBlocks[item.chapterId] ?? [];
+
+      final parsed = parseChapterId(item.chapterId);
+      final isSub = parsed?.sub != null;
+      if (!isSub) mainIdx++;
+      final chNum = isSub ? '${parsed!.top}.${parsed.sub}' : toChineseNum(mainIdx);
+      final cleanTitle = stripTitleNumber(item.title);
+
+      widgets.add(Padding(
+        padding: EdgeInsets.only(top: oi == 0 ? 0 : 16, bottom: 8),
+        child: Text('$chNum、$cleanTitle', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+      ));
+
+      for (final block in blocks) {
+        if (block.type == BlockType.heading) {
+          final headingText = block.text ?? '';
+          if (stripHeadingNumber(headingText).trim() == cleanTitle) continue;
+        }
+        widgets.add(BlockRenderer(block: block, chapterIndex: mainIdx));
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: widgets),
     );
   }
 
@@ -273,19 +284,11 @@ class ReviewStage extends ConsumerWidget {
       child: Row(
         children: ExportFormat.values.map((fmt) {
           final isSelected = state.selectedFormat == fmt;
-          Color iconBgColor;
-          Color iconColor;
-          switch (fmt) {
-            case ExportFormat.docx:
-              iconBgColor = AppColors.primaryBg;
-              iconColor = AppColors.primary;
-            case ExportFormat.pdf:
-              iconBgColor = AppColors.errorBg;
-              iconColor = AppColors.error;
-            case ExportFormat.html:
-              iconBgColor = AppColors.ctaBg;
-              iconColor = AppColors.cta;
-          }
+          final (iconBgColor, iconColor) = switch (fmt) {
+            ExportFormat.docx => (AppColors.primaryBg, AppColors.primary),
+            ExportFormat.pdf => (AppColors.errorBg, AppColors.error),
+            ExportFormat.html => (AppColors.ctaBg, AppColors.cta),
+          };
           return Expanded(
             child: GestureDetector(
               onTap: () => notifier.selectExportFormat(fmt),
@@ -296,31 +299,18 @@ class ReviewStage extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.primaryBg : AppColors.surface,
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(
-                    color: isSelected ? AppColors.primary : AppColors.border,
-                    width: 1.5,
-                  ),
+                  border: Border.all(color: isSelected ? AppColors.primary : AppColors.border, width: 1.5),
                 ),
                 child: Column(
                   children: [
                     Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: iconBgColor,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                      ),
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(color: iconBgColor, borderRadius: BorderRadius.circular(AppRadius.sm)),
                       child: Icon(fmt.icon, size: 20, color: iconColor),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      fmt.label,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text),
-                    ),
-                    Text(
-                      fmt.extension,
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.textMuted),
-                    ),
+                    Text(fmt.label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text)),
+                    Text(fmt.extension, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.textMuted)),
                   ],
                 ),
               ),

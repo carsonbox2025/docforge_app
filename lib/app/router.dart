@@ -87,7 +87,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/subscription', builder: (_, __) => const SubscriptionPage()),
       GoRoute(path: '/templates', builder: (_, __) => const TemplateGalleryPage()),
       GoRoute(path: '/templates/:id', builder: (_, state) {
-        final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+        final id = state.pathParameters['id'] ?? '';
         return TemplatePreviewPage(templateId: id);
       }),
       GoRoute(path: '/history', builder: (_, __) => const HistoryListPage()),

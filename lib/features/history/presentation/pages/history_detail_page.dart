@@ -29,17 +29,18 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
   }
 
   Future<void> _loadData() async {
-    final results = await Future.wait([
-      _dataSource.getDocumentDetail(widget.documentId),
-      _dataSource.getDocumentContent(widget.documentId),
-      _dataSource.getReviewResult(widget.documentId),
-    ]);
+    final detail = await _dataSource.getDocumentDetail(widget.documentId);
 
-    if (!mounted) return;
+    if (!mounted || detail == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
     setState(() {
-      _document = results[0] as HistoryDocument?;
-      _content = results[1] as String;
-      _review = results[2] as ReviewResult?;
+      _document = _dataSource.parseDocument(detail);
+      _content = detail['content'] as String? ?? '';
+      if (detail['review'] != null) {
+        _review = _dataSource.parseReview(detail['review'] as Map<String, dynamic>);
+      }
       _isLoading = false;
     });
   }

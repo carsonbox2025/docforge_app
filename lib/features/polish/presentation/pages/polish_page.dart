@@ -57,12 +57,18 @@ class _InputStage extends ConsumerWidget {
 
                   // Upload zone or text input
                   state.inputMode == InputMode.upload
-                      ? _UploadZone(
-                          fileName: state.fileName,
-                          onFileSelected: (name) => notifier.setFileName(name),
+                      ? SizedBox(
+                          width: double.infinity,
+                          child: _UploadZone(
+                            fileName: state.fileName,
+                            onFileSelected: (name) => notifier.setFileName(name),
+                          ),
                         )
-                      : _TextInputArea(
-                          onChanged: (text) => notifier.setTextContent(text),
+                      : SizedBox(
+                          width: double.infinity,
+                          child: _TextInputArea(
+                            onChanged: (text) => notifier.setTextContent(text),
+                          ),
                         ),
 
                   // Document type
@@ -611,6 +617,7 @@ class _ResultStage extends ConsumerWidget {
                   _CompareCard(
                     activeTab: state.compareTab,
                     result: result,
+                    streamingText: state.streamingText,
                     onTabChanged: (tab) => notifier.setCompareTab(tab),
                   ),
 
@@ -668,7 +675,7 @@ class _ResultStage extends ConsumerWidget {
                           child: SizedBox(
                             height: 44,
                             child: ElevatedButton.icon(
-                              onPressed: () {},
+                              onPressed: () => notifier.exportResult(),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.success,
                                 foregroundColor: Colors.white,
@@ -706,11 +713,13 @@ class _ResultStage extends ConsumerWidget {
 class _CompareCard extends StatelessWidget {
   final CompareTab activeTab;
   final PolishResult? result;
+  final String streamingText;
   final ValueChanged<CompareTab> onTabChanged;
 
   const _CompareCard({
     required this.activeTab,
     this.result,
+    this.streamingText = '',
     required this.onTabChanged,
   });
 
@@ -801,6 +810,18 @@ class _CompareCard extends StatelessWidget {
   }
 
   Widget _buildPolishedView() {
+    // 优先使用 polishedText 整体显示，其次从 diff 段落提取
+    if (result!.polishedText != null && result!.polishedText!.isNotEmpty) {
+      return Text(
+        result!.polishedText!,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          height: 1.8,
+          color: AppColors.text,
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: result!.paragraphs.map((para) {
@@ -825,6 +846,18 @@ class _CompareCard extends StatelessWidget {
   }
 
   Widget _buildOriginalView() {
+    // 优先使用 originalText 整体显示，其次从 diff 段落提取
+    if (result!.originalText != null && result!.originalText!.isNotEmpty) {
+      return Text(
+        result!.originalText!,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          height: 1.8,
+          color: AppColors.text,
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: result!.paragraphs.map((para) {

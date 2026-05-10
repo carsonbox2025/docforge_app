@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/sse/sse_client.dart';
@@ -30,21 +31,23 @@ class TranslateDataSource {
     return response.data['data'] ?? response.data;
   }
 
-  Future<void> exportDocument({
+  Future<List<int>> exportDocument({
     required String translatedContent,
     required ExportFormat format,
     required String sourceLang,
     required String targetLang,
   }) async {
-    await ApiClient.instance.post(
-      '${AppConstants.apiBaseUrl}/translate/export',
+    final response = await ApiClient.instance.post<List<int>>(
+      '${AppConstants.apiBaseUrl}/translate/document/export',
       data: {
         'content': translatedContent,
         'format': format.name,
         'source_lang': sourceLang,
         'target_lang': targetLang,
       },
+      options: Options(responseType: ResponseType.bytes),
     );
+    return response.data!;
   }
 
   Future<List<GlossaryTerm>> getGlossary() async {

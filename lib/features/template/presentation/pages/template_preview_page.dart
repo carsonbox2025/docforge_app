@@ -6,7 +6,7 @@ import '../../data/template_data_source.dart';
 import '../../data/models/template_models.dart';
 
 class TemplatePreviewPage extends StatefulWidget {
-  final int templateId;
+  final String templateId;
 
   const TemplatePreviewPage({super.key, required this.templateId});
 
@@ -26,10 +26,10 @@ class _TemplatePreviewPageState extends State<TemplatePreviewPage> {
   }
 
   Future<void> _loadTemplate() async {
-    final template = await _dataSource.getTemplateDetail(widget.templateId);
+    final templates = await _dataSource.getTemplates();
     if (!mounted) return;
     setState(() {
-      _template = template;
+      _template = templates.where((t) => t.id == widget.templateId).firstOrNull;
       _isLoading = false;
     });
   }

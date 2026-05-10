@@ -4,7 +4,7 @@ export '../../../../shared/models/export_format.dart';
 /// 润色强度
 enum PolishLevel {
   light('light', '轻度', '仅修正错误'),
-  medium('medium', '中度', '优化表达'),
+  medium('normal', '中度', '优化表达'),
   deep('deep', '深度', '重写提升');
 
   final String value;
@@ -67,9 +67,22 @@ class PolishRequest {
         if (text != null) 'text': text,
         if (filePath != null) 'file_path': filePath,
         'input_mode': inputMode.name,
-        'level': level.value,
-        'doc_type': docType,
+        'polish_level': level.value,
+        'doc_type': _mapDocType(docType),
       };
+
+  /// 将中文文档类型映射为后端英文标识
+  static String _mapDocType(String label) {
+    const mapping = {
+      '自动检测': 'generic',
+      '合同': 'contract',
+      '公文': 'official',
+      '报告': 'report',
+      '论文': 'paper',
+      '简历': 'resume',
+    };
+    return mapping[label] ?? 'generic';
+  }
 }
 
 /// 单条修订

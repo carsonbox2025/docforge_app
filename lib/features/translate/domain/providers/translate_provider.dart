@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/translate_data_source.dart';
 import '../../data/models/translate_models.dart';
+import '../../../../shared/utils/file_export.dart';
 
 final translateProvider =
     StateNotifierProvider<TranslateNotifier, TranslateState>((ref) {
@@ -16,6 +18,8 @@ class TranslateState {
   final Language targetLang;
   final String inputText;
   final String translatedText;
+  final String? documentFilePath;
+  final String? documentFileName;
   final List<GlossaryTerm> glossary;
   final List<TranslateResult> previewResults;
   final ExportFormat selectedFormat;
@@ -29,6 +33,8 @@ class TranslateState {
     this.targetLang = Language.enUS,
     this.inputText = '',
     this.translatedText = '',
+    this.documentFilePath,
+    this.documentFileName,
     this.glossary = const [],
     this.previewResults = const [],
     this.selectedFormat = ExportFormat.docx,
@@ -43,12 +49,15 @@ class TranslateState {
     Language? targetLang,
     String? inputText,
     String? translatedText,
+    String? documentFilePath,
+    String? documentFileName,
     List<GlossaryTerm>? glossary,
     List<TranslateResult>? previewResults,
     ExportFormat? selectedFormat,
     bool? isLoading,
     String? errorMessage,
     bool clearError = false,
+    bool clearDocument = false,
   }) {
     return TranslateState(
       stage: stage ?? this.stage,
@@ -57,6 +66,8 @@ class TranslateState {
       targetLang: targetLang ?? this.targetLang,
       inputText: inputText ?? this.inputText,
       translatedText: translatedText ?? this.translatedText,
+      documentFilePath: clearDocument ? null : (documentFilePath ?? this.documentFilePath),
+      documentFileName: clearDocument ? null : (documentFileName ?? this.documentFileName),
       glossary: glossary ?? this.glossary,
       previewResults: previewResults ?? this.previewResults,
       selectedFormat: selectedFormat ?? this.selectedFormat,
@@ -101,6 +112,17 @@ class TranslateNotifier extends StateNotifier<TranslateState> {
     state = state.copyWith(inputText: text);
   }
 
+  void setDocumentFile(String filePath, String fileName) {
+    state = state.copyWith(
+      documentFilePath: filePath,
+      documentFileName: fileName,
+    );
+  }
+
+  void clearDocumentFile() {
+    state = state.copyWith(clearDocument: true);
+  }
+
   void setExportFormat(ExportFormat format) {
     state = state.copyWith(selectedFormat: format);
   }
@@ -114,6 +136,49 @@ class TranslateNotifier extends StateNotifier<TranslateState> {
   }
 
   Future<void> translate() async {
+    if (state.mode == TranslateMode.document) {
+      await _translateDocument();
+    } else {
+      await _translateText();
+    }
+  }
+
+  Future<void> _translateDocument() async {
+    if (state.documentFilePath == null) return;
+
+    _sseSubscription?.cancel();
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    try {
+      final result = await _dataSource.translateDocument(
+        filePath: state.documentFilePath!,
+        sourceLang: state.sourceLang,
+        targetLang: state.targetLang,
+        glossary: state.glossary,
+      );
+
+      final translated = result['translated_text'] as String? ?? '';
+      final paragraphs = (result['paragraphs'] as List<dynamic>?)
+              ?.map((e) => TranslateResult.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [TranslateResult(translatedText: translated)];
+
+      state = state.copyWith(
+        translatedText: translated,
+        previewResults: paragraphs,
+        isLoading: false,
+        stage: TranslateStage.result,
+      );
+    } catch (e) {
+      debugPrint('[Translate] Document error: $e');
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: '文档翻译失败，请稍后重试',
+      );
+    }
+  }
+
+  Future<void> _translateText() async {
     if (state.inputText.trim().isEmpty) return;
 
     _sseSubscription?.cancel();
@@ -191,11 +256,15 @@ class TranslateNotifier extends StateNotifier<TranslateState> {
   Future<void> export() async {
     state = state.copyWith(isLoading: true);
     try {
-      await _dataSource.exportDocument(
+      final bytes = await _dataSource.exportDocument(
         translatedContent: state.translatedText,
         format: state.selectedFormat,
         sourceLang: state.sourceLang.code,
         targetLang: state.targetLang.code,
+      );
+      await FileExporter.saveAndShare(
+        bytes: Uint8List.fromList(bytes),
+        fileName: 'translated.${state.selectedFormat.extension}',
       );
       state = state.copyWith(isLoading: false);
     } catch (e) {

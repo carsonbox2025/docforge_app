@@ -55,16 +55,26 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
 
   Future<void> loadDocuments() async {
     state = state.copyWith(isLoading: true);
-    final docs = await _dataSource.getHistoryList();
-    if (!mounted) return;
-    state = state.copyWith(documents: docs, isLoading: false);
+    try {
+      final docs = await _dataSource.getHistoryList();
+      if (!mounted) return;
+      state = state.copyWith(documents: docs, isLoading: false);
+    } catch (_) {
+      if (!mounted) return;
+      state = state.copyWith(documents: const [], isLoading: false);
+    }
   }
 
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
-    final docs = await _dataSource.getHistoryList();
-    if (!mounted) return;
-    state = state.copyWith(documents: docs, isLoading: false);
+    try {
+      final docs = await _dataSource.getHistoryList();
+      if (!mounted) return;
+      state = state.copyWith(documents: docs, isLoading: false);
+    } catch (_) {
+      if (!mounted) return;
+      state = state.copyWith(documents: const [], isLoading: false);
+    }
   }
 
   Future<bool> deleteDocument(int id) async {

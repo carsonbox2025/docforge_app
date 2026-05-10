@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../data/models/translate_models.dart';
@@ -487,52 +488,93 @@ class _TextInputModeState extends ConsumerState<_TextInputMode> {
 
 // ==================== Document Input Mode ====================
 
-class _DocumentInputMode extends StatelessWidget {
+class _DocumentInputMode extends ConsumerWidget {
   const _DocumentInputMode();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(translateProvider);
+    final notifier = ref.read(translateProvider.notifier);
+    final hasFile = state.documentFilePath != null;
+
     return Column(
       children: [
         const _LangSelector(),
         const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: GestureDetector(
-            onTap: () {
-              // TODO: file picker integration
-            },
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.border, width: 2),
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                color: AppColors.surface,
-              ),
-              child: const Column(
-                children: [
-                  Icon(Icons.upload_file_outlined,
-                      size: 32, color: AppColors.textMuted),
-                  SizedBox(height: 8),
-                  Text(
-                    '上传文档翻译',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text,
-                    ),
+        SizedBox(
+          width: double.infinity,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: GestureDetector(
+              onTap: () async {
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['docx', 'pdf', 'txt', 'md'],
+                );
+                if (result != null && result.files.single.path != null) {
+                  final file = result.files.single;
+                  notifier.setDocumentFile(file.path!, file.name);
+                }
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: hasFile ? AppColors.cta : AppColors.border,
+                    width: 2,
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    '支持 .docx .pdf .txt .md，最大 50MB\n自动保留原文格式和排版',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  color: hasFile ? AppColors.ctaBg : AppColors.surface,
+                ),
+                child: hasFile
+                    ? Column(
+                        children: [
+                          const Icon(Icons.description_outlined,
+                              size: 32, color: AppColors.cta),
+                          const SizedBox(height: 8),
+                          Text(
+                            state.documentFileName ?? '',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.cta,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            '点击重新选择文件',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      )
+                    : const Column(
+                        children: [
+                          Icon(Icons.upload_file_outlined,
+                              size: 32, color: AppColors.textMuted),
+                          SizedBox(height: 8),
+                          Text(
+                            '上传文档翻译',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            '支持 .docx .pdf .txt .md，最大 50MB\n自动保留原文格式和排版',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ),

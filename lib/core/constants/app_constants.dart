@@ -8,11 +8,16 @@ class AppConstants {
   static const String appSlogan = '智能文档工坊';
   static const String appKey = 'docforge';
 
-  // Android 模拟器用 10.0.2.2 访问宿主机，其他平台用 localhost
+  // 通过 --dart-define=API_HOST=xxx 覆盖，否则按平台自动推断
+  static const String _envHost = String.fromEnvironment('API_HOST');
+
   static String get apiSchemeAndHost {
     if (kIsWeb) return '';
+    if (_envHost.isNotEmpty) return _envHost;
+    // Android 模拟器用 10.0.2.2 访问宿主机
     if (!kReleaseMode && Platform.isAndroid) return 'http://10.0.2.2';
-    return 'http://192.168.19.37';
+    if (kReleaseMode) return 'https://your-production-host.com';
+    return 'http://localhost';
   }
 
   static const String apiBasePath = '/aistudio/service/docforge';

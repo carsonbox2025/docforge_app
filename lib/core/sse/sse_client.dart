@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../network/api_client.dart';
 
 class SseEvent {
@@ -53,9 +54,10 @@ class SseClient {
       }
 
       void emitCurrentEvent() {
-        if (currentEvent != null && currentData != null) {
+        if (currentData != null && currentData != '[DONE]') {
+          debugPrint('[SSE] emit: event=${currentEvent ?? 'message'}, data=${currentData!.substring(0, currentData!.length.clamp(0, 120))}');
           controller.add(SseEvent(
-            event: currentEvent!,
+            event: currentEvent ?? 'message',
             data: currentData!,
             id: currentId,
           ));

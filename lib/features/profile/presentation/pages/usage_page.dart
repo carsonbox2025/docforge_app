@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../shared/widgets/common_widgets.dart';
+import '../../data/quota_data_source.dart';
+import '../../domain/providers/quota_provider.dart';
 
-class UsagePage extends StatelessWidget {
+class UsagePage extends ConsumerWidget {
   const UsagePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final quotaState = ref.watch(quotaProvider);
+
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
@@ -34,16 +40,59 @@ class UsagePage extends StatelessWidget {
           child: Container(color: AppColors.borderLight, height: 0.5),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+      body: quotaState.isLoading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : quotaState.error != null
+              ? _buildErrorState(ref, quotaState.error!)
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildMonthCard(quotaState.data!),
+                      const SizedBox(height: 16),
+                      _buildDailyCard(quotaState.data!),
+                      const SizedBox(height: 16),
+                      _buildQuotaBreakdown(quotaState.data!),
+                    ],
+                  ),
+                ),
+    );
+  }
+
+  Widget _buildErrorState(WidgetRef ref, String error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            _buildMonthCard(),
+            Icon(Icons.error_outline, size: 48, color: AppColors.error),
+            const SizedBox(height: 12),
+            Text(
+              '加载用量数据失败',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              error,
+              style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
-            _buildDailyCard(),
-            const SizedBox(height: 16),
-            _buildQuotaBreakdown(),
+            ElevatedButton.icon(
+              onPressed: () => ref.read(quotaProvider.notifier).refresh(),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('重试'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
           ],
         ),
       ),
@@ -52,7 +101,12 @@ class UsagePage extends StatelessWidget {
 
   // ─── Monthly quota card ────────────────────────────────────────────────────
 
-  Widget _buildMonthCard() {
+  Widget _buildMonthCard(QuotaUsage data) {
+    final totalUsed = data.generate.used + data.polish.used + data.translate.used;
+    final totalLimit = data.generate.limit + data.polish.limit + data.translate.limit;
+    final remaining = totalLimit - totalUsed;
+    final progress = totalLimit > 0 ? totalUsed / totalLimit : 0.0;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -100,9 +154,9 @@ class UsagePage extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    '86',
-                    style: TextStyle(
+                  Text(
+                    '$remaining',
+                    style: const TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
@@ -124,7 +178,7 @@ class UsagePage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '100 / 100',
+                    '$totalUsed / $totalLimit',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -149,7 +203,7 @@ class UsagePage extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: 0.14,
+              value: progress.clamp(0.0, 1.0),
               backgroundColor: Colors.white.withValues(alpha: 0.2),
               valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
               minHeight: 6,
@@ -162,7 +216,11 @@ class UsagePage extends StatelessWidget {
 
   // ─── Daily quota card ──────────────────────────────────────────────────────
 
-  Widget _buildDailyCard() {
+  Widget _buildDailyCard(QuotaUsage data) {
+    final todayUsed = data.generate.used;
+    final dailyLimit = data.generate.limit;
+    final progress = dailyLimit > 0 ? todayUsed / dailyLimit : 0.0;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -180,7 +238,7 @@ class UsagePage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '今日用量',
+            '本月用量',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -191,7 +249,7 @@ class UsagePage extends StatelessWidget {
           Row(
             children: [
               Text(
-                '5',
+                '$todayUsed',
                 style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
@@ -202,7 +260,7 @@ class UsagePage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Text(
-                  '/ 20 次',
+                  '/ $dailyLimit 次',
                   style: const TextStyle(
                     fontSize: 14,
                     color: AppColors.textMuted,
@@ -216,7 +274,7 @@ class UsagePage extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: 0.25,
+              value: progress.clamp(0.0, 1.0),
               backgroundColor: AppColors.primaryBg,
               valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
               minHeight: 6,
@@ -229,7 +287,7 @@ class UsagePage extends StatelessWidget {
 
   // ─── Quota breakdown by type ───────────────────────────────────────────────
 
-  Widget _buildQuotaBreakdown() {
+  Widget _buildQuotaBreakdown(QuotaUsage data) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -260,8 +318,8 @@ class UsagePage extends StatelessWidget {
             iconColor: AppColors.primary,
             iconBg: AppColors.primaryBg,
             title: '生成',
-            used: 42,
-            limit: 50,
+            used: data.generate.used,
+            limit: data.generate.limit,
             color: AppColors.primary,
           ),
           const SizedBox(height: 14),
@@ -270,8 +328,8 @@ class UsagePage extends StatelessWidget {
             iconColor: AppColors.success,
             iconBg: AppColors.successBg,
             title: '精修',
-            used: 28,
-            limit: 50,
+            used: data.polish.used,
+            limit: data.polish.limit,
             color: AppColors.success,
           ),
           const SizedBox(height: 14),
@@ -280,19 +338,9 @@ class UsagePage extends StatelessWidget {
             iconColor: AppColors.purple,
             iconBg: Color(0x0F7C3AED),
             title: '翻译',
-            used: 15,
-            limit: 30,
+            used: data.translate.used,
+            limit: data.translate.limit,
             color: AppColors.purple,
-          ),
-          const SizedBox(height: 14),
-          _UsageRow(
-            icon: Icons.file_download_outlined,
-            iconColor: AppColors.cta,
-            iconBg: AppColors.ctaBg,
-            title: '导出',
-            used: 8,
-            limit: 20,
-            color: AppColors.cta,
           ),
         ],
       ),
@@ -363,7 +411,7 @@ class _UsageRow extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(3),
                 child: LinearProgressIndicator(
-                  value: progress,
+                  value: progress.clamp(0.0, 1.0),
                   backgroundColor: AppColors.borderLight,
                   valueColor: AlwaysStoppedAnimation<Color>(color),
                   minHeight: 4,
