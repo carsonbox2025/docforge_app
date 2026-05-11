@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../data/models/generate_models.dart';
 import '../../domain/providers/generate_provider.dart';
-import '../../../../shared/models/dsl/document_block.dart';
+import '../../../../shared/models/dsl/document_block.dart' show BlockType, GenerationStatus, ChapterStatus;
 import '../../../../shared/widgets/feature_header.dart';
 import '../../../../shared/widgets/blocks/block_renderer.dart';
 import '../../../../shared/utils/chapter_numbering.dart';
@@ -296,7 +295,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
             ),
             const SizedBox(height: 12),
             Text(
-              state.generatedContent,
+              state.progressMsg ?? '正在处理...',
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.text, height: 1.8),
             ),
             if (isGenerating) const _Cursor(),

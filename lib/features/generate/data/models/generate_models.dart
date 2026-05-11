@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../../../shared/models/export_format.dart';
 export '../../../../shared/models/export_format.dart';
@@ -42,12 +41,6 @@ extension ExportFormatIcon on ExportFormat {
   };
 }
 
-/// 生成阶段
-enum GenerateStage { input, generating, review }
-
-/// 步骤状态（用于步骤指示器）
-enum StepStatus { done, active, pending }
-
 /// 生成请求
 class GenerateRequest {
   final String templateId;
@@ -84,23 +77,6 @@ class ChapterMeta {
       );
 }
 
-/// SSE 流式事件
-class GenerateEvent {
-  final String event;
-  final String? data;
-
-  const GenerateEvent({required this.event, this.data});
-
-  Map<String, dynamic>? get dataAsJson {
-    if (data == null) return null;
-    try {
-      return jsonDecode(data!) as Map<String, dynamic>;
-    } catch (_) {
-      return null;
-    }
-  }
-}
-
 /// 审校级别
 enum ReviewLevel {
   pass('pass'),
@@ -132,28 +108,4 @@ class ReviewFinding {
         message: json['message'] as String? ?? '',
         location: json['location'] as String? ?? '',
       );
-}
-
-/// 生成结果摘要
-class GenerateResult {
-  final String title;
-  final List<ChapterMeta> chapters;
-  final String content;
-  final int wordCount;
-  final List<ReviewFinding> findings;
-
-  const GenerateResult({
-    required this.title,
-    required this.chapters,
-    required this.content,
-    this.wordCount = 0,
-    this.findings = const [],
-  });
-
-  int get chapterCount => chapters.length;
-
-  int get passCount => findings.where((f) => f.level == ReviewLevel.pass).length;
-  int get warnCount => findings.where((f) => f.level == ReviewLevel.warn).length;
-  int get errorCount => findings.where((f) => f.level == ReviewLevel.error).length;
-  int get infoCount => findings.where((f) => f.level == ReviewLevel.info).length;
 }

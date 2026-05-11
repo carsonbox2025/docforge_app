@@ -13,9 +13,8 @@ class ApiClient {
   Dio get dio => _dio;
 
   void init({String? baseUrl}) {
-    final effectiveBaseUrl = baseUrl ?? _resolveBaseUrl();
     _dio = Dio(BaseOptions(
-      baseUrl: effectiveBaseUrl,
+      baseUrl: baseUrl ?? AppConstants.apiBasePath,
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 60),
       headers: {'Content-Type': 'application/json'},
@@ -61,9 +60,4 @@ class ApiClient {
     Map<String, dynamic>? queryParameters,
   }) =>
       _dio.delete<T>(path, queryParameters: queryParameters);
-
-  static String _resolveBaseUrl() {
-    if (kIsWeb) return AppConstants.apiBasePath;
-    return '${AppConstants.apiSchemeAndHost}${AppConstants.apiBasePath}';
-  }
 }

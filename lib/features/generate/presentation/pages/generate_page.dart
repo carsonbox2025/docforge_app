@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../data/models/generate_models.dart';
 import '../../domain/providers/generate_provider.dart';
 import '../widgets/input_stage.dart';
 import '../widgets/generating_stage.dart';

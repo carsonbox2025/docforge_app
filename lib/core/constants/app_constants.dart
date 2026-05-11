@@ -11,29 +11,28 @@ class AppConstants {
   // 通过 --dart-define=API_HOST=xxx 覆盖，否则按平台自动推断
   static const String _envHost = String.fromEnvironment('API_HOST');
 
-  static String get apiSchemeAndHost {
-    if (kIsWeb) return '';
+  /// 后端服务 origin（scheme + host + port）
+  static String get apiOrigin {
     if (_envHost.isNotEmpty) return _envHost;
-    // Android 模拟器用 10.0.2.2 访问宿主机
+    if (kIsWeb) return 'http://localhost:8000';
     if (!kReleaseMode && Platform.isAndroid) return 'http://10.0.2.2';
     if (kReleaseMode) return 'https://your-production-host.com';
-    return 'http://localhost';
+    return 'http://localhost:8000';
   }
 
-  static const String apiBasePath = '/aistudio/service/docforge';
+  // DocForge API 路径前缀
+  static String get apiBasePath => '$apiOrigin/aistudio/service/docforge';
 
   // data source 使用：baseUrl 已包含完整路径，此处返回空字符串
   static const String apiBaseUrl = '';
 
-  // BFF auth 路由：POST /aistudio/service/app/{appKey}/auth/login
-  //                POST /aistudio/service/app/{appKey}/sms/send-code
-  //                POST /aistudio/service/app/{appKey}/sms/verify-login
-  static String get _appPrefix =>
-      kIsWeb ? '/aistudio/service/app' : '$apiSchemeAndHost/aistudio/service/app';
-
-  static String get apiLoginUrl => '$_appPrefix/$appKey/auth/login';
-  static String get apiSmsSendCodeUrl => '$_appPrefix/$appKey/sms/send-code';
-  static String get apiSmsVerifyLoginUrl => '$_appPrefix/$appKey/sms/verify-login';
+  // BFF auth 路由：走 /aistudio/service/app/docforge/...
+  static String get apiLoginUrl =>
+      '$apiOrigin/aistudio/service/app/$appKey/auth/login';
+  static String get apiSmsSendCodeUrl =>
+      '$apiOrigin/aistudio/service/app/$appKey/sms/send-code';
+  static String get apiSmsVerifyLoginUrl =>
+      '$apiOrigin/aistudio/service/app/$appKey/sms/verify-login';
 
   // Storage keys
   static const String tokenKey = 'auth_token';
