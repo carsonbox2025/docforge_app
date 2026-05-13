@@ -5,28 +5,46 @@ import '../../data/models/membership_models.dart';
 import '../../../payment/data/payment_data_source.dart';
 import '../../../payment/data/models/payment_models.dart';
 import '../../../payment/domain/providers/payment_provider.dart';
+import '../../../scene/data/models/scene_models.dart';
+import '../../../scene/domain/providers/scene_provider.dart';
 
 class MembershipState {
   final QuotaInfo? quota;
   final PlanType selectedPlan;
+  final PaymentChannel channel;
   final bool isLoading;
-  final List<BenefitItem> benefits;
+  final int totalScenes;
+  final int totalTemplates;
 
   const MembershipState({
     this.quota,
     this.selectedPlan = PlanType.yearly,
+    this.channel = PaymentChannel.alipay,
     this.isLoading = false,
-    this.benefits = const [
-      BenefitItem(name: '生成次数', freeValue: '每场景1次', proValue: '∞', isFreeChecked: true, isProChecked: true),
-      BenefitItem(name: '模板库', freeValue: '基础模板', proValue: '50+模板', isFreeChecked: true, isProChecked: true),
-      BenefitItem(name: '文档精修', freeValue: '—', proValue: '∞', isFreeChecked: false, isProChecked: true),
-      BenefitItem(name: '多语言翻译', freeValue: '—', proValue: '6种语言', isFreeChecked: false, isProChecked: true),
-      BenefitItem(name: '合规检查', freeValue: '—', proValue: '√', isFreeChecked: false, isProChecked: true),
-      BenefitItem(name: '导出格式', freeValue: 'Word', proValue: 'Word/PDF/HTML', isFreeChecked: true, isProChecked: true),
-      BenefitItem(name: 'AI响应速度', freeValue: '标准', proValue: '优先', isFreeChecked: true, isProChecked: true),
-      BenefitItem(name: '专属客服', freeValue: '—', proValue: '7×24h', isFreeChecked: false, isProChecked: true),
-    ],
+    this.totalScenes = 0,
+    this.totalTemplates = 0,
   });
+
+  /// 从场景列表动态生成权益项
+  List<BenefitItem> buildBenefits(List<SceneConfig> scenes) {
+    final items = <BenefitItem>[];
+    for (final scene in scenes) {
+      items.add(BenefitItem(
+        name: scene.name,
+        freeValue: scene.pricing.isFree ? '免费' : '1次体验',
+        proValue: '不限',
+        isFreeChecked: true,
+        isProChecked: true,
+      ));
+    }
+    items.addAll([
+      const BenefitItem(name: '文档精修', freeValue: '—', proValue: '∞', isFreeChecked: false),
+      const BenefitItem(name: '多语言翻译', freeValue: '—', proValue: '6种语言', isFreeChecked: false),
+      const BenefitItem(name: '导出格式', freeValue: 'Word', proValue: 'Word/PDF/HTML', isFreeChecked: true),
+      const BenefitItem(name: 'AI响应速度', freeValue: '标准', proValue: '优先', isFreeChecked: true),
+    ]);
+    return items;
+  }
 
   String get ctaLabel => '立即订阅 · ${selectedPlan.price}/${selectedPlan == PlanType.lifetime ? '永久' : selectedPlan.period.replaceAll('/', '')}';
   String get ctaPrice => selectedPlan.price;
@@ -34,21 +52,38 @@ class MembershipState {
   MembershipState copyWith({
     QuotaInfo? quota,
     PlanType? selectedPlan,
+    PaymentChannel? channel,
     bool? isLoading,
+    int? totalScenes,
+    int? totalTemplates,
   }) {
     return MembershipState(
       quota: quota ?? this.quota,
       selectedPlan: selectedPlan ?? this.selectedPlan,
+      channel: channel ?? this.channel,
       isLoading: isLoading ?? this.isLoading,
-      benefits: benefits,
+      totalScenes: totalScenes ?? this.totalScenes,
+      totalTemplates: totalTemplates ?? this.totalTemplates,
     );
   }
 }
 
 class MembershipNotifier extends StateNotifier<MembershipState> {
   final PaymentDataSource _paymentDs = PaymentDataSource();
+  final Ref _ref;
 
-  MembershipNotifier() : super(const MembershipState());
+  MembershipNotifier(this._ref) : super(const MembershipState()) {
+    _loadSceneStats();
+  }
+
+  /// 从场景列表聚合统计数据
+  Future<void> _loadSceneStats() async {
+    try {
+      final scenes = await _ref.read(sceneListProvider.future);
+      if (!mounted) return;
+      state = state.copyWith(totalScenes: scenes.length);
+    } catch (_) {}
+  }
 
   /// 加载真实配额数据
   Future<void> loadQuota() async {
@@ -64,12 +99,16 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
     state = state.copyWith(selectedPlan: plan);
   }
 
+  void selectChannel(PaymentChannel ch) {
+    state = state.copyWith(channel: ch);
+  }
+
   /// 真实订阅流程
   Future<void> subscribe() async {
     state = state.copyWith(isLoading: true);
     try {
       final order = await _paymentDs.createOrder(CreateOrderRequest(
-        channel: 'alipay',
+        channel: state.channel.name,
         orderType: 'membership',
       ));
 
@@ -100,8 +139,7 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
 
 final membershipProvider =
     StateNotifierProvider<MembershipNotifier, MembershipState>((ref) {
-  final notifier = MembershipNotifier();
-  // 自动加载配额
+  final notifier = MembershipNotifier(ref);
   notifier.loadQuota();
   return notifier;
 });

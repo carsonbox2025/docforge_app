@@ -14,6 +14,8 @@ class DocumentListState {
   final bool isLoading;
   final String? error;
   final DocCenterTab tab;
+  final int currentPage;
+  final bool hasMore;
 
   const DocumentListState({
     this.items = const [],
@@ -21,6 +23,8 @@ class DocumentListState {
     this.isLoading = false,
     this.error,
     this.tab = DocCenterTab.all,
+    this.currentPage = 1,
+    this.hasMore = true,
   });
 
   DocumentListState copyWith({
@@ -29,6 +33,8 @@ class DocumentListState {
     bool? isLoading,
     String? error,
     DocCenterTab? tab,
+    int? currentPage,
+    bool? hasMore,
   }) =>
       DocumentListState(
         items: items ?? this.items,
@@ -36,6 +42,8 @@ class DocumentListState {
         isLoading: isLoading ?? this.isLoading,
         error: error,
         tab: tab ?? this.tab,
+        currentPage: currentPage ?? this.currentPage,
+        hasMore: hasMore ?? this.hasMore,
       );
 }
 
@@ -81,10 +89,50 @@ class DocumentListNotifier extends StateNotifier<DocumentListState> {
         items: docs,
         total: result['total'] as int? ?? 0,
         isLoading: false,
+        currentPage: page,
+        hasMore: docs.length < (result['total'] as int? ?? 0),
       );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  Future<void> loadMore() async {
+    if (!state.hasMore || state.isLoading) return;
+    final nextPage = state.currentPage + 1;
+    try {
+      DocStatus? status;
+      if (state.tab == DocCenterTab.running) {
+        status = DocStatus.running;
+      } else if (state.tab == DocCenterTab.completed) {
+        status = DocStatus.completed;
+      }
+
+      final result = await _ds.listDocuments(status: status, page: nextPage);
+      final rawItems = result['items'] as List<dynamic>? ?? [];
+      final newDocs = rawItems
+          .map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      if (state.tab == DocCenterTab.running) {
+        try {
+          final pendingResult = await _ds.listDocuments(status: DocStatus.pending, page: nextPage);
+          final pendingRaw = pendingResult['items'] as List<dynamic>? ?? [];
+          newDocs.addAll(
+            pendingRaw.map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>)).toList(),
+          );
+          newDocs.sort((a, b) => (b.createdAt ?? '').compareTo(a.createdAt ?? ''));
+        } catch (_) {}
+      }
+
+      final total = result['total'] as int? ?? 0;
+      state = state.copyWith(
+        items: [...state.items, ...newDocs],
+        total: total,
+        currentPage: nextPage,
+        hasMore: state.items.length + newDocs.length < total,
+      );
+    } catch (_) {}
   }
 }
 

@@ -142,8 +142,8 @@ class _PayWallState extends ConsumerState<PayWall> {
       children: [
         Expanded(
           child: _ChannelCard(
-            icon: Icons.account_balance_wallet,
             label: '支付宝',
+            brandIcon: '支',
             brandColor: const Color(0xFF1677FF),
             isActive: _channel == PaymentChannel.alipay,
             enabled: _step == _PayStep.idle,
@@ -153,8 +153,8 @@ class _PayWallState extends ConsumerState<PayWall> {
         const SizedBox(width: 12),
         Expanded(
           child: _ChannelCard(
-            icon: Icons.chat_bubble,
             label: '微信支付',
+            brandIcon: '微',
             brandColor: const Color(0xFF07C160),
             isActive: _channel == PaymentChannel.wechat,
             enabled: _step == _PayStep.idle,
@@ -229,11 +229,11 @@ class _PayWallState extends ConsumerState<PayWall> {
     try {
       final paid = await ref.read(paymentProvider.notifier).pollUntilPaid(_orderNo!, maxAttempts: 5);
       if (paid) {
-        if (mounted) setState(() => _step = _PayStep.done);
-        await Future.delayed(const Duration(milliseconds: 800));
+        widget.onPaid();
         if (mounted) {
+          setState(() => _step = _PayStep.done);
+          await Future.delayed(const Duration(milliseconds: 600));
           Navigator.of(context).pop();
-          widget.onPaid();
         }
       } else {
         if (mounted) {
@@ -311,16 +311,16 @@ class _PayButton extends StatelessWidget {
 }
 
 class _ChannelCard extends StatelessWidget {
-  final IconData icon;
   final String label;
+  final String brandIcon;
   final Color brandColor;
   final bool isActive;
   final bool enabled;
   final VoidCallback onTap;
 
   const _ChannelCard({
-    required this.icon,
     required this.label,
+    required this.brandIcon,
     required this.brandColor,
     required this.isActive,
     this.enabled = true,
@@ -344,7 +344,24 @@ class _ChannelCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Icon(icon, size: 28, color: isActive ? brandColor : AppColors.textMuted),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: brandColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: Text(
+                  brandIcon,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 6),
             Text(
               label,

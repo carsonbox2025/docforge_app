@@ -50,6 +50,7 @@ class Template {
   final String description;
   final TemplateColorScheme colorScheme;
   final List<String> tags;
+  final bool requirePro;
 
   const Template({
     required this.id,
@@ -59,5 +60,6 @@ class Template {
     this.description = '',
     required this.colorScheme,
     this.tags = const [],
+    this.requirePro = false,
   });
 }

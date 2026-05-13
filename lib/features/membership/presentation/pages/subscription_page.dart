@@ -6,6 +6,8 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../payment/data/models/payment_models.dart';
+import '../../../scene/domain/providers/scene_provider.dart';
 import '../../data/models/membership_models.dart';
 import '../../domain/providers/membership_provider.dart';
 
@@ -30,6 +32,8 @@ class SubscriptionPage extends ConsumerWidget {
             _buildPlanSelector(ref, state),
             const SizedBox(height: 16),
             _buildBenefitsTable(state),
+            const SizedBox(height: 16),
+            _buildChannelSelector(ref, state),
             const SizedBox(height: 16),
             _buildCTAButton(ref, state),
             _buildFooterNote(),
@@ -65,6 +69,7 @@ class SubscriptionPage extends ConsumerWidget {
   }
 
   Widget _buildHeroBanner(MembershipState state) {
+    final scenesCount = state.totalScenes > 0 ? '${state.totalScenes}+' : '50+';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(AppSpacing.xxl, AppSpacing.lg, AppSpacing.xxl, AppSpacing.xxl + 4),
@@ -112,12 +117,12 @@ class SubscriptionPage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 20),
-          // Stats row
+          // Stats row — 动态数据
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _StatItem(value: '∞', label: '文档生成'),
-              _StatItem(value: '50+', label: '专业模板'),
+              _StatItem(value: scenesCount, label: '专业场景'),
               _StatItem(value: '6', label: '语言翻译'),
             ],
           ),
@@ -249,63 +254,106 @@ class SubscriptionPage extends ConsumerWidget {
   }
 
   Widget _buildBenefitsTable(MembershipState state) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
+    return Consumer(
+      builder: (context, ref, _) {
+        final scenesAsync = ref.watch(sceneListProvider);
+        final benefits = scenesAsync.whenOrNull(
+              data: (scenes) => state.buildBenefits(scenes),
+            ) ??
+            [
+              const BenefitItem(name: '生成次数', freeValue: '每场景1次', proValue: '∞', isFreeChecked: true),
+              const BenefitItem(name: '文档精修', freeValue: '—', proValue: '∞', isFreeChecked: false),
+              const BenefitItem(name: '多语言翻译', freeValue: '—', proValue: '6种语言', isFreeChecked: false),
+              const BenefitItem(name: '导出格式', freeValue: 'Word', proValue: 'Word/PDF/HTML', isFreeChecked: true),
+              const BenefitItem(name: 'AI响应速度', freeValue: '标准', proValue: '优先', isFreeChecked: true),
+            ];
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: AppColors.border)),
+                ),
+                child: Row(
+                  children: const [
+                    Expanded(flex: 3, child: Text('权益', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary))),
+                    Expanded(flex: 2, child: Center(child: Text('Free', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textMuted)))),
+                    Expanded(flex: 2, child: Center(child: Text('Pro', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)))),
+                  ],
+                ),
+              ),
+              ...benefits.map((benefit) => Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: AppColors.borderLight)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        benefit.name,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.text),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Center(
+                        child: benefit.isFreeChecked
+                            ? Text(benefit.freeValue, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))
+                            : Icon(Icons.close, size: 14, color: AppColors.textMuted.withValues(alpha: 0.5)),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Center(
+                        child: benefit.isProChecked
+                            ? Text(benefit.proValue, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary))
+                            : Icon(Icons.close, size: 14, color: AppColors.textMuted.withValues(alpha: 0.5)),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildChannelSelector(WidgetRef ref, MembershipState state) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: Row(
         children: [
-          // Header row
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Row(
-              children: const [
-                Expanded(flex: 3, child: Text('权益', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary))),
-                Expanded(flex: 2, child: Center(child: Text('Free', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textMuted)))),
-                Expanded(flex: 2, child: Center(child: Text('Pro', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)))),
-              ],
+          Expanded(
+            child: _SubChannelCard(
+              label: '支付宝',
+              brandIcon: '支',
+              brandColor: const Color(0xFF1677FF),
+              isActive: state.channel == PaymentChannel.alipay,
+              onTap: () => ref.read(membershipProvider.notifier).selectChannel(PaymentChannel.alipay),
             ),
           ),
-          // Benefit rows
-          ...state.benefits.map((benefit) => Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.borderLight)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _SubChannelCard(
+              label: '微信支付',
+              brandIcon: '微',
+              brandColor: const Color(0xFF07C160),
+              isActive: state.channel == PaymentChannel.wechat,
+              onTap: () => ref.read(membershipProvider.notifier).selectChannel(PaymentChannel.wechat),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    benefit.name,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.text),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Center(
-                    child: benefit.isFreeChecked
-                        ? Text(benefit.freeValue, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))
-                        : Icon(Icons.close, size: 14, color: AppColors.textMuted.withValues(alpha: 0.5)),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Center(
-                    child: benefit.isProChecked
-                        ? Text(benefit.proValue, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary))
-                        : Icon(Icons.close, size: 14, color: AppColors.textMuted.withValues(alpha: 0.5)),
-                  ),
-                ),
-              ],
-            ),
-          )),
+          ),
         ],
       ),
     );
@@ -424,6 +472,72 @@ class _StatItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SubChannelCard extends StatelessWidget {
+  final String label;
+  final String brandIcon;
+  final Color brandColor;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _SubChannelCard({
+    required this.label,
+    required this.brandIcon,
+    required this.brandColor,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isActive ? brandColor.withValues(alpha: 0.08) : AppColors.bg,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(
+            color: isActive ? brandColor : AppColors.border,
+            width: isActive ? 2.0 : 1.0,
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: brandColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: Text(
+                  brandIcon,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive ? brandColor : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

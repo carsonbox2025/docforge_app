@@ -78,7 +78,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
           showBackButton: true,
           onBack: () => notifier.backToInput(),
         ),
-        _buildSteps(),
+        _buildSteps(isGenerating, notifier),
         if (hasError)
           Container(
             margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
@@ -302,17 +302,57 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
 
   // ─── 公共组件 ───
 
-  Widget _buildSteps() {
+  Widget _buildSteps(bool isGenerating, GenerateNotifier notifier) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _stepDot(StepStatus.done),
-          _stepLine(true),
-          _stepDot(StepStatus.active),
-          _stepLine(false),
-          _stepDot(StepStatus.pending),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _stepDot(StepStatus.done),
+                _stepLine(true),
+                _stepDot(StepStatus.active),
+                _stepLine(false),
+                _stepDot(StepStatus.pending),
+              ],
+            ),
+          ),
+          if (isGenerating)
+            TextButton.icon(
+              onPressed: () => _confirmCancel(notifier),
+              icon: Icon(Icons.stop_circle_outlined, size: 18, color: AppColors.textMuted),
+              label: Text('取消', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmCancel(GenerateNotifier notifier) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('取消生成'),
+        content: const Text('已生成的内容将不会保存，确定取消吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('继续生成'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              notifier.cancelGenerate();
+            },
+            child: Text('确定取消', style: TextStyle(color: AppColors.error)),
+          ),
         ],
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../shared/widgets/shimmer_skeleton.dart';
 import '../../data/models/document_models.dart';
 import '../../domain/providers/document_provider.dart';
 
@@ -16,6 +17,8 @@ class DocumentCenterPage extends ConsumerStatefulWidget {
 class _DocumentCenterPageState extends ConsumerState<DocumentCenterPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
+  final _scrollController = ScrollController();
+  bool _isLoadingMore = false;
 
   @override
   void initState() {
@@ -28,7 +31,7 @@ class _DocumentCenterPageState extends ConsumerState<DocumentCenterPage>
       initialIndex: initialIndex,
     );
     _tabCtrl.addListener(_onTabChange);
-    // 用当前 tab 加载数据（与 TabController 保持一致）
+    _scrollController.addListener(_onScroll);
     Future.microtask(() => ref.read(documentListProvider.notifier).load(
           tab: DocCenterTab.values[initialIndex],
         ));
@@ -37,8 +40,26 @@ class _DocumentCenterPageState extends ConsumerState<DocumentCenterPage>
   @override
   void dispose() {
     _tabCtrl.removeListener(_onTabChange);
+    _scrollController.removeListener(_onScroll);
     _tabCtrl.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_isLoadingMore) return;
+    if (!_scrollController.hasClients) return;
+    final max = _scrollController.position.maxScrollExtent;
+    final current = _scrollController.offset;
+    if (max - current < 200) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadMore() async {
+    setState(() => _isLoadingMore = true);
+    await ref.read(documentListProvider.notifier).loadMore();
+    if (mounted) setState(() => _isLoadingMore = false);
   }
 
   void _onTabChange() {
@@ -73,7 +94,12 @@ class _DocumentCenterPageState extends ConsumerState<DocumentCenterPage>
         ),
       ),
       body: state.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: 5,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (_, __) => const CardShimmer(),
+            )
           : state.error != null
               ? _buildError(state.error!)
               : state.items.isEmpty
@@ -81,10 +107,24 @@ class _DocumentCenterPageState extends ConsumerState<DocumentCenterPage>
                   : RefreshIndicator(
                       onRefresh: () => ref.read(documentListProvider.notifier).load(),
                       child: ListView.separated(
+                        controller: _scrollController,
                         padding: const EdgeInsets.all(16),
-                        itemCount: state.items.length,
+                        itemCount: state.items.length + (_isLoadingMore ? 1 : 0),
                         separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (_, i) => _DocCard(doc: state.items[i]),
+                        itemBuilder: (_, i) {
+                          if (i == state.items.length) {
+                            return const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 20, height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                            );
+                          }
+                          return _DocCard(doc: state.items[i]);
+                        },
                       ),
                     ),
     );

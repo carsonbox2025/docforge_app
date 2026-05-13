@@ -43,7 +43,7 @@ class AppNavigationShell extends StatelessWidget {
           elevation: 0,
           items: [
             _navItem(Icons.home_outlined, Icons.home, '首页'),
-            _navItem(Icons.bolt_outlined, Icons.bolt, '生成'),
+            _centerNavItem(),
             _navItem(Icons.auto_fix_high_outlined, Icons.auto_fix_high, '精修'),
             _navItem(Icons.translate_outlined, Icons.translate, '翻译'),
             _navItem(Icons.person_outline, Icons.person, '我的'),
@@ -58,6 +58,45 @@ class AppNavigationShell extends StatelessWidget {
       icon: Icon(icon, size: 22),
       activeIcon: Icon(activeIcon, size: 22),
       label: label,
+    );
+  }
+
+  BottomNavigationBarItem _centerNavItem() {
+    const isActive = false; // controlled by currentIndex
+    return BottomNavigationBarItem(
+      icon: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Icon(Icons.bolt, size: 22, color: Colors.white),
+      ),
+      activeIcon: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.4),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: const Icon(Icons.bolt, size: 24, color: Colors.white),
+      ),
+      label: '生成',
     );
   }
 }

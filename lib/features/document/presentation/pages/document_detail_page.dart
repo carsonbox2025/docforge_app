@@ -360,7 +360,7 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
       }
       _nodes = allNodes;
     } catch (e) {
-      // 降级：尝试当作纯文本处理
+      debugPrint('[DocumentDetail] parseDslContent error: $e');
     }
   }
 

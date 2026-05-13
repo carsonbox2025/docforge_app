@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../../shared/widgets/shimmer_skeleton.dart';
 import '../../data/models/template_models.dart';
 import '../../domain/providers/template_provider.dart';
 
@@ -22,14 +23,20 @@ class TemplateGalleryPage extends ConsumerWidget {
           _buildCategoryTabs(ref, state),
           Expanded(
             child: state.isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                : state.filteredTemplates.isEmpty
-                    ? const EmptyState(
-                        title: '暂无模板',
-                        subtitle: '该分类下暂无模板',
-                        icon: Icons.dashboard_customize_outlined,
-                      )
-                    : _buildTemplateGrid(state),
+                ? _buildShimmerGrid()
+                : state.error != null
+                    ? _buildError(state.error!, ref)
+                    : state.filteredTemplates.isEmpty
+                        ? const EmptyState(
+                            title: '暂无模板',
+                            subtitle: '该分类下暂无模板',
+                            icon: Icons.dashboard_customize_outlined,
+                          )
+                        : RefreshIndicator(
+                            color: AppColors.primary,
+                            onRefresh: () => ref.read(templateProvider.notifier).reload(),
+                            child: _buildTemplateGrid(state),
+                          ),
           ),
         ],
       ),
@@ -138,6 +145,42 @@ class TemplateGalleryPage extends ConsumerWidget {
       },
     );
   }
+
+  Widget _buildShimmerGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 20),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.78,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: 6,
+      itemBuilder: (_, __) => const GridCardShimmer(),
+    );
+  }
+
+  Widget _buildError(String error, WidgetRef ref) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+          const SizedBox(height: 12),
+          Text(error, style: const TextStyle(fontSize: 14, color: AppColors.error)),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () => ref.read(templateProvider.notifier).reload(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('重试'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _TemplateCard extends StatelessWidget {
@@ -205,19 +248,30 @@ class _TemplateCard extends StatelessWidget {
                     Positioned(
                       top: 10,
                       right: 10,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: template.colorScheme.primary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          template.category.icon,
-                          size: 14,
-                          color: template.colorScheme.primary,
-                        ),
-                      ),
+                      child: template.requirePro
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.cta,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text('Pro', style: TextStyle(
+                                fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white,
+                              )),
+                            )
+                          : Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: template.colorScheme.primary.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Icon(
+                                template.category.icon,
+                                size: 14,
+                                color: template.colorScheme.primary,
+                              ),
+                            ),
                     ),
                   ],
                 ),

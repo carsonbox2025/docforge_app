@@ -6,6 +6,7 @@ import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/generate_models.dart';
 import '../../domain/providers/generate_provider.dart';
 import '../../../../shared/widgets/feature_header.dart';
+import '../../../../shared/widgets/review_report.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ReviewStage extends ConsumerStatefulWidget {
@@ -41,7 +42,7 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
   Future<void> _initWebView(String url) async {
     final token = await SecureStorage.instance.getToken();
     _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setJavaScriptMode(JavaScriptMode.disabled)
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (_) {
           if (mounted) setState(() => _isLoading = false);
@@ -97,6 +98,8 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
           onBack: () => notifier.backToInput(),
         ),
         _buildSteps(),
+        // 审校报告
+        _buildReviewReport(state),
         // WebView 预览区
         Expanded(
           child: _buildPreview(state),
@@ -181,6 +184,25 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
           _stepDot(StepStatus.active),
         ],
       ),
+    );
+  }
+
+  Widget _buildReviewReport(GenerateState state) {
+    final resultData = state.resultData;
+    if (resultData == null) return const SizedBox.shrink();
+    final reviewData = resultData['review_result'];
+    if (reviewData == null) return const SizedBox.shrink();
+
+    final findingsRaw = reviewData['findings'] as List<dynamic>?;
+    final findings = findingsRaw
+            ?.map((f) => ReviewFinding.fromJson(f as Map<String, dynamic>))
+            .toList() ??
+        [];
+
+    return ReviewReportCard(
+      passed: findings.isEmpty,
+      findings: findings,
+      fixedCount: reviewData['fixed_count'] as int? ?? 0,
     );
   }
 

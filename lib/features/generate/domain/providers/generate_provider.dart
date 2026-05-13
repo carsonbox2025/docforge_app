@@ -340,6 +340,19 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     state = state.copyWith(stage: GenerateStage.generating);
   }
 
+  /// 取消当前生成任务
+  void cancelGenerate() {
+    _progressSub?.cancel();
+    if (_currentTaskId != null) {
+      _dataSource.cancelTask(_currentTaskId!);
+    }
+    state = state.copyWith(
+      stage: GenerateStage.input,
+      status: GenerationStatus.idle,
+      clearError: true,
+    );
+  }
+
   /// 组装提交内容：有场景时合并表单字段，否则用原始 content
   String _assembleContent(SceneConfig? scene) {
     if (scene == null) return state.content;
