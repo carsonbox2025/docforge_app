@@ -64,6 +64,25 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
     final state = ref.watch(generateProvider);
     final notifier = ref.read(generateProvider.notifier);
 
+    // 监听导出错误
+    ref.listen(generateProvider, (prev, next) {
+      if (next.error != null) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: '重试',
+              textColor: Colors.white,
+              onPressed: () => notifier.exportDocument(),
+            ),
+          ),
+        );
+      }
+    });
+
     final title = state.docTitle.isNotEmpty ? state.docTitle : state.selectedType.label;
     final wordCount = state.resultData?['word_count'] ?? 0;
     final chapterCount = state.resultData?['chapter_count'] ?? state.outline.length;
@@ -75,7 +94,7 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
           title: '生成完成',
           subtitle: '$title · 共 $chapterCount 章节 · 约 $wordCount 字',
           showBackButton: true,
-          onBack: () => notifier.backToGenerating(),
+          onBack: () => notifier.backToInput(),
         ),
         _buildSteps(),
         // WebView 预览区

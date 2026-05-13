@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../data/models/membership_models.dart';
@@ -125,7 +127,7 @@ class SubscriptionPage extends ConsumerWidget {
   }
 
   Widget _buildCurrentPlanCard(MembershipState state) {
-    final status = state.status;
+    final quota = state.quota;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -153,17 +155,17 @@ class SubscriptionPage extends ConsumerWidget {
                 Row(
                   children: [
                     Text(
-                      status.currentPlan.label,
+                      quota?.planLabel ?? '免费版',
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text),
                     ),
                     const SizedBox(width: 8),
-                    if (status.isPro && !status.isExpired)
+                    if (quota != null && quota.isPro)
                       BadgeWidget.primary('生效中'),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  status.expireDate != null ? '到期时间：${status.expireDate}' : '未订阅',
+                  quota?.expiresAt != null ? '到期时间：${quota!.expiresAt}' : '未订阅',
                   style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
               ],
@@ -336,7 +338,7 @@ class SubscriptionPage extends ConsumerWidget {
                     const Icon(Icons.auto_awesome, size: 18),
                     const SizedBox(width: 6),
                     Text(
-                      '立即续费 · ${state.selectedPlan.price}/${state.selectedPlan == PlanType.lifetime ? '永久' : '年'}',
+                      _ctaLabel(state),
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                   ],
@@ -356,13 +358,45 @@ class SubscriptionPage extends ConsumerWidget {
             style: TextStyle(fontSize: 11, color: AppColors.textMuted.withValues(alpha: 0.7)),
           ),
           const SizedBox(height: 4),
-          Text(
-            '购买即表示同意《用户协议》和《隐私政策》',
-            style: TextStyle(fontSize: 11, color: AppColors.textMuted.withValues(alpha: 0.7)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('购买即表示同意', style: TextStyle(fontSize: 11, color: AppColors.textMuted.withValues(alpha: 0.7))),
+              GestureDetector(
+                onTap: () {
+                  final url = AppConstants.termsUrl;
+                  if (url.isNotEmpty) launchUrl(Uri.parse(url));
+                },
+                child: Text('《用户协议》', style: TextStyle(
+                  fontSize: 11, color: AppColors.primary, decoration: TextDecoration.underline,
+                )),
+              ),
+              Text(' 和 ', style: TextStyle(fontSize: 11, color: AppColors.textMuted.withValues(alpha: 0.7))),
+              GestureDetector(
+                onTap: () {
+                  final url = AppConstants.privacyUrl;
+                  if (url.isNotEmpty) launchUrl(Uri.parse(url));
+                },
+                child: Text('《隐私政策》', style: TextStyle(
+                  fontSize: 11, color: AppColors.primary, decoration: TextDecoration.underline,
+                )),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  static String _ctaLabel(MembershipState state) {
+    final quota = state.quota;
+    final action = (quota == null || !quota.isPro) ? '立即订阅' : '立即续费';
+    final period = switch (state.selectedPlan) {
+      PlanType.monthly => '/月',
+      PlanType.yearly => '/年（约¥${(state.selectedPlan.priceNum / 12).toStringAsFixed(1)}/月）',
+      PlanType.lifetime => '（一次付费永久使用）',
+    };
+    return '$action · ${state.selectedPlan.price}$period';
   }
 }
 

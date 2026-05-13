@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/generate_data_source.dart';
 import '../../data/task_data_source.dart';
 import '../../data/models/generate_models.dart';
-import '../../../../shared/models/dsl/document_block.dart'
-    show DocumentBlock, GenerationStatus, ChapterStatus, OutlineItem, StreamingBlock;
+import '../../../../shared/models/dsl/dsl_node.dart' show DslNode, DslOutline;
 import '../../../../shared/utils/file_export.dart';
+import '../../../scene/data/models/scene_models.dart';
+
+enum GenerationStatus { idle, planning, generating, complete, error }
 
 final generateProvider =
     StateNotifierProvider<GenerateNotifier, GenerateState>((ref) {
@@ -36,26 +38,65 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     state = state.copyWith(selectedFormat: fmt);
   }
 
+  void selectMode(String mode) {
+    state = state.copyWith(mode: mode);
+  }
+
+  /// 选择场景
+  void selectScene(SceneConfig scene) {
+    state = state.copyWith(
+      selectedScene: scene,
+      selectedType: _docTypeFromScene(scene),
+    );
+  }
+
+  /// 更新表单字段值
+  void updateFormFields(Map<String, String> fields) {
+    state = state.copyWith(formFields: fields);
+  }
+
+  /// 更新封面字段值
+  void updateFieldsData(Map<String, String> fields) {
+    state = state.copyWith(fieldsData: fields);
+  }
+
+  static DocType _docTypeFromScene(SceneConfig scene) {
+    return DocType.values.firstWhere(
+      (t) => t.code == scene.docType,
+      orElse: () => DocType.contract,
+    );
+  }
+
   /// 提交生成任务（异步后台执行）
   Future<void> startGenerate({bool outlineOnly = false}) async {
-    if (state.content.trim().isEmpty) return;
+    final scene = state.selectedScene;
+    final content = _assembleContent(scene);
+    if (content.trim().isEmpty) {
+      state = state.copyWith(error: '请填写内容后再提交');
+      return;
+    }
 
     state = state.copyWith(
       stage: GenerateStage.generating,
       status: GenerationStatus.planning,
       progress: 0,
       outline: [],
-      currentBlocks: {},
+      dslNodes: {},
       streamingBlocks: {},
       clearError: true,
     );
 
     final request = GenerateRequest(
-      templateId: state.selectedType.defaultTemplateId,
-      content: state.content,
+      templateId: scene?.templateId ?? state.selectedType.defaultTemplateId,
+      content: content,
       language: state.selectedLanguage,
       title: state.docTitle.isEmpty ? null : state.docTitle,
       outlineOnly: outlineOnly,
+      mode: state.mode,
+      docType: scene?.docType ?? state.selectedType.code,
+      sceneId: scene?.sceneId,
+      layer: scene?.layer,
+      fieldsData: state.fieldsData.isNotEmpty ? state.fieldsData : null,
     );
 
     try {
@@ -86,10 +127,10 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       (update) {
         if (!mounted) return;
 
-        // 解析进度详情中的章节信息
+        // 解析 DSL 更新
         final detail = update.detail;
         if (detail != null) {
-          _handleProgressDetail(detail);
+          _handleDslUpdate(detail);
         }
 
         // 更新进度
@@ -116,18 +157,75 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     );
   }
 
-  void _handleProgressDetail(Map<String, dynamic> detail) {
-    // 处理章节规划信息
+  void _handleDslUpdate(Map<String, dynamic> detail) {
+    final dslUpdate = detail['dsl_update'] as Map<String, dynamic>?;
+    if (dslUpdate == null) {
+      // 兼容旧格式
+      _handleLegacyProgressDetail(detail);
+      return;
+    }
+
+    // 更新 outline
+    final outlineRaw = dslUpdate['outline'] as List<dynamic>?;
+    if (outlineRaw != null) {
+      final outline = outlineRaw
+          .map((o) => DslOutline.fromJson(o as Map<String, dynamic>))
+          .toList();
+      if (outline.isNotEmpty) {
+        state = state.copyWith(outline: outline);
+      }
+    }
+
+    // 更新 active section
+    final activeSection = dslUpdate['active_section'] as String?;
+
+    // 更新 DSL nodes
+    final nodeUpdates = dslUpdate['node_updates'] as List<dynamic>?;
+    if (nodeUpdates != null && nodeUpdates.isNotEmpty) {
+      final nodes = Map<String, List<DslNode>>.from(state.dslNodes);
+
+      for (final update in nodeUpdates) {
+        final u = update as Map<String, dynamic>;
+        final op = u['op'] as String? ?? 'append';
+        final section = u['section'] as String? ?? 'main';
+
+        if (op == 'replace_all') {
+          final rawNodes = u['nodes'] as List<dynamic>? ?? [];
+          nodes[section] = rawNodes
+              .map((n) => DslNode.fromJson(n as Map<String, dynamic>))
+              .toList();
+        } else if (op == 'append') {
+          final rawNode = u['node'] as Map<String, dynamic>?;
+          if (rawNode != null) {
+            final node = DslNode.fromJson(rawNode);
+            nodes.putIfAbsent(section, () => []);
+            // 避免重复追加（同一 block_id）
+            final existingIds = nodes[section]!
+                .where((n) => n.id != null)
+                .map((n) => n.id)
+                .toSet();
+            if (node.id == null || !existingIds.contains(node.id)) {
+              nodes[section] = [...nodes[section]!, node];
+            }
+          }
+        }
+      }
+
+      state = state.copyWith(dslNodes: nodes);
+    }
+  }
+
+  void _handleLegacyProgressDetail(Map<String, dynamic> detail) {
+    // 兼容旧格式 outline
     final chapters = detail['chapters'] as List<dynamic>?;
     if (chapters != null) {
-      final outline = <OutlineItem>[];
+      final outline = <DslOutline>[];
       for (final ch in chapters) {
         final map = ch as Map<String, dynamic>;
-        outline.add(OutlineItem(
-          chapterId: map['id'] as String? ?? '',
+        outline.add(DslOutline(
+          id: map['id'] as String? ?? '',
           title: map['title'] as String? ?? '未命名章节',
-          taskId: map['id'] as String?,
-          status: ChapterStatus.pending,
+          status: 'pending',
         ));
       }
       if (outline.isNotEmpty) {
@@ -135,13 +233,16 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       }
     }
 
-    // 处理当前章节
     final currentChapter = detail['current_chapter'] as String?;
     if (currentChapter != null) {
-      final outline = List<OutlineItem>.from(state.outline);
-      final item = outline.where((o) => o.chapterId == currentChapter).firstOrNull;
-      if (item != null) {
-        item.status = ChapterStatus.generating;
+      final outline = List<DslOutline>.from(state.outline);
+      final idx = outline.indexWhere((o) => o.id == currentChapter);
+      if (idx >= 0) {
+        outline[idx] = DslOutline(
+          id: outline[idx].id,
+          title: outline[idx].title,
+          status: 'generating',
+        );
         state = state.copyWith(outline: outline);
       }
     }
@@ -226,20 +327,32 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
 
   void backToInput() {
     _progressSub?.cancel();
-    _cancelTask();
-    state = state.copyWith(stage: GenerateStage.input);
+    state = state.copyWith(stage: GenerateStage.input, clearError: true);
+  }
+
+  void clearError() {
+    if (state.error != null) {
+      state = state.copyWith(clearError: true);
+    }
   }
 
   void backToGenerating() {
     state = state.copyWith(stage: GenerateStage.generating);
   }
 
-  Future<void> _cancelTask() async {
-    if (_currentTaskId != null) {
-      try {
-        await _dataSource.cancelTask(_currentTaskId!);
-      } catch (_) {}
+  /// 组装提交内容：有场景时合并表单字段，否则用原始 content
+  String _assembleContent(SceneConfig? scene) {
+    if (scene == null) return state.content;
+
+    final parts = <String>[];
+    for (final entry in state.formFields.entries) {
+      if (entry.value.isNotEmpty) {
+        parts.add('${entry.key}：${entry.value}');
+      }
     }
+    // content 字段单独处理（已在 formFields 中）
+    if (parts.isEmpty) return state.content;
+    return parts.join('\n');
   }
 
   /// 导出文档（通过 document_id）
@@ -261,9 +374,13 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       );
     } catch (e) {
       debugPrint('[Generate] Export error: $e');
-    } finally {
-      if (mounted) state = state.copyWith(isExporting: false);
+      if (mounted) state = state.copyWith(
+        isExporting: false,
+        error: '导出失败，请检查网络后重试',
+      );
+      return;
     }
+    if (mounted) state = state.copyWith(isExporting: false);
   }
 
   /// 获取预览 URL
@@ -293,16 +410,26 @@ class GenerateState {
   final String content;
   final ExportFormat selectedFormat;
 
+  // 场景模式
+  final SceneConfig? selectedScene;
+  final Map<String, String> formFields;
+  final Map<String, String> fieldsData;
+
   // 生成状态
   final GenerationStatus status;
   final String docTitle;
   final double progress;
   final String? progressMsg;
 
-  // Block DSL 状态
-  final List<OutlineItem> outline;
-  final Map<String, List<DocumentBlock>> currentBlocks;
-  final Map<String, StreamingBlock> streamingBlocks;
+  // 模式
+  final String mode; // quick / professional / auto
+
+  // DSL 状态（统一）
+  final List<DslOutline> outline;
+  final Map<String, List<DslNode>> dslNodes;
+
+  // 兼容旧格式
+  final Map<String, dynamic> streamingBlocks;
 
   // 结果
   final int? documentId;
@@ -317,12 +444,16 @@ class GenerateState {
     this.selectedLanguage = DocLanguage.zhCN,
     this.content = '',
     this.selectedFormat = ExportFormat.docx,
+    this.selectedScene,
+    this.formFields = const {},
+    this.fieldsData = const {},
     this.status = GenerationStatus.idle,
     this.docTitle = '',
     this.progress = 0,
     this.progressMsg,
+    this.mode = 'quick',
     this.outline = const [],
-    this.currentBlocks = const {},
+    this.dslNodes = const {},
     this.streamingBlocks = const {},
     this.documentId,
     this.resultData,
@@ -336,13 +467,18 @@ class GenerateState {
     DocLanguage? selectedLanguage,
     String? content,
     ExportFormat? selectedFormat,
+    SceneConfig? selectedScene,
+    bool clearSelectedScene = false,
+    Map<String, String>? formFields,
+    Map<String, String>? fieldsData,
     GenerationStatus? status,
     String? docTitle,
     double? progress,
-    String? progressMsg,
-    List<OutlineItem>? outline,
-    Map<String, List<DocumentBlock>>? currentBlocks,
-    Map<String, StreamingBlock>? streamingBlocks,
+    Object? progressMsg = _sentinel,
+    String? mode,
+    List<DslOutline>? outline,
+    Map<String, List<DslNode>>? dslNodes,
+    Map<String, dynamic>? streamingBlocks,
     int? documentId,
     Map<String, dynamic>? resultData,
     String? error,
@@ -355,16 +491,22 @@ class GenerateState {
         selectedLanguage: selectedLanguage ?? this.selectedLanguage,
         content: content ?? this.content,
         selectedFormat: selectedFormat ?? this.selectedFormat,
+        selectedScene: clearSelectedScene ? null : (selectedScene ?? this.selectedScene),
+        formFields: formFields ?? this.formFields,
+        fieldsData: fieldsData ?? this.fieldsData,
         status: status ?? this.status,
         docTitle: docTitle ?? this.docTitle,
         progress: progress ?? this.progress,
-        progressMsg: progressMsg ?? this.progressMsg,
+        progressMsg: progressMsg == _sentinel ? this.progressMsg : progressMsg as String?,
+        mode: mode ?? this.mode,
         outline: outline ?? this.outline,
-        currentBlocks: currentBlocks ?? this.currentBlocks,
+        dslNodes: dslNodes ?? this.dslNodes,
         streamingBlocks: streamingBlocks ?? this.streamingBlocks,
         documentId: documentId ?? this.documentId,
         resultData: resultData ?? this.resultData,
         error: clearError ? null : (error ?? this.error),
         isExporting: isExporting ?? this.isExporting,
       );
+
+  static const _sentinel = Object();
 }

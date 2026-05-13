@@ -53,6 +53,7 @@ class PolishRequest {
   final PolishLevel level;
   final String docType;
   final String? fileName;
+  final String mode; // quick / professional
 
   const PolishRequest({
     this.text,
@@ -61,6 +62,7 @@ class PolishRequest {
     required this.level,
     required this.docType,
     this.fileName,
+    this.mode = 'quick',
   });
 
   Map<String, dynamic> toJson() => {
@@ -69,6 +71,7 @@ class PolishRequest {
         'input_mode': inputMode.name,
         'polish_level': level.value,
         'doc_type': _mapDocType(docType),
+        'mode': mode,
       };
 
   /// 将中文文档类型映射为后端英文标识

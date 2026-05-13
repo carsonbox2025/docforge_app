@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/providers/generate_provider.dart';
-import '../../../../shared/models/dsl/document_block.dart' show BlockType, GenerationStatus, ChapterStatus;
+import '../../../../shared/models/dsl/dsl_node.dart' show DslNode;
 import '../../../../shared/widgets/feature_header.dart';
-import '../../../../shared/widgets/blocks/block_renderer.dart';
+import '../../../../shared/widgets/dsl/dsl_renderer.dart';
 import '../../../../shared/utils/chapter_numbering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -58,41 +58,63 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
     final notifier = ref.read(generateProvider.notifier);
 
     ref.listen<GenerateState>(generateProvider, (prev, next) {
-      if (next.currentBlocks != prev?.currentBlocks) {
+      if (next.dslNodes != prev?.dslNodes) {
         _scrollToBottom();
       }
     });
 
-    final hasBlocks = state.currentBlocks.isNotEmpty;
+    final hasNodes = state.dslNodes.isNotEmpty &&
+        state.dslNodes.values.any((list) => list.isNotEmpty);
     final isGenerating = state.status == GenerationStatus.generating;
+
+    final hasError = state.error != null;
 
     return Column(
       children: [
         FeatureHeader(
-          color: AppColors.primary,
-          title: '正在生成',
+          color: hasError ? AppColors.error : AppColors.primary,
+          title: hasError ? '生成失败' : '正在生成',
           subtitle: '${state.selectedType.label} · ${state.selectedLanguage.label}',
           showBackButton: true,
           onBack: () => notifier.backToInput(),
         ),
         _buildSteps(),
-        Expanded(
-          child: hasBlocks
-              ? _buildBlockLayout(state, isGenerating)
-              : _buildLegacyLayout(state, isGenerating),
-        ),
-        // 底部进度条
-        _buildProgressBar(state),
+        if (hasError)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.errorBg,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, size: 16, color: AppColors.error),
+                const SizedBox(width: 8),
+                Expanded(child: Text(state.error!, style: TextStyle(fontSize: 12, color: AppColors.error))),
+                TextButton(
+                  onPressed: () => notifier.backToInput(),
+                  child: Text('返回修改', style: TextStyle(fontSize: 12, color: AppColors.error)),
+                ),
+              ],
+            ),
+          ),
+        if (!hasError)
+          Expanded(
+            child: hasNodes
+                ? _buildDslLayout(state, isGenerating)
+                : _buildLegacyLayout(state, isGenerating),
+          ),
+        if (!hasError)
+          _buildProgressBar(state),
         const SizedBox(height: 16),
       ],
     );
   }
 
-  // ===========================================================================
-  // Block DSL 布局（左侧大纲 + 右侧渲染区）
-  // ===========================================================================
+  // ─── DSL 布局（统一渲染器）───
 
-  Widget _buildBlockLayout(GenerateState state, bool isGenerating) {
+  Widget _buildDslLayout(GenerateState state, bool isGenerating) {
     return Row(
       children: [
         // 左侧大纲
@@ -101,7 +123,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
           child: _buildOutlinePanel(state),
         ),
         Container(width: 1, color: AppColors.border),
-        // 右侧渲染区
+        // 右侧 DSL 渲染区
         Expanded(
           child: SingleChildScrollView(
             controller: _scrollController,
@@ -114,12 +136,72 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 border: Border.all(color: AppColors.border),
               ),
-              child: _buildBlockContent(state, isGenerating),
+              child: _buildDslContent(state, isGenerating),
             ),
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildDslContent(GenerateState state, bool isGenerating) {
+    final outline = state.outline;
+    final nodes = state.dslNodes;
+
+    if (outline.isEmpty && nodes.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _PulseDot(),
+              SizedBox(height: 12),
+              Text('AI 正在规划文档结构...', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final List<Widget> widgets = [];
+    int mainChapterIdx = 0;
+
+    for (int oi = 0; oi < outline.length; oi++) {
+      final item = outline[oi];
+      final chId = item.id;
+      final sectionNodes = nodes[chId] ?? [];
+
+      // 章节标题
+      final parsed = parseChapterId(chId);
+      final isSub = parsed?.sub != null;
+      if (!isSub) mainChapterIdx++;
+      final chNum = isSub ? '${parsed!.top}.${parsed.sub}' : toChineseNum(mainChapterIdx);
+      final cleanTitle = stripTitleNumber(item.title);
+
+      widgets.add(Padding(
+        padding: EdgeInsets.only(top: oi == 0 ? 0 : 16, bottom: 8),
+        child: isSub
+            ? Text('$chNum $cleanTitle', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.text))
+            : Text('$chNum、$cleanTitle', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+      ));
+
+      // 章节内容 — 使用 DslRenderer
+      final isLastSection = oi == outline.length - 1;
+      if (sectionNodes.isNotEmpty) {
+        widgets.add(DslRenderer(
+          nodes: sectionNodes,
+          isStreaming: isLastSection && isGenerating,
+        ));
+      } else if (item.status == 'generating') {
+        widgets.add(const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+        ));
+      }
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: widgets);
   }
 
   Widget _buildOutlinePanel(GenerateState state) {
@@ -130,10 +212,10 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
         itemCount: state.outline.length,
         itemBuilder: (_, i) {
           final item = state.outline[i];
-          final isActive = item.status == ChapterStatus.generating;
-          final isDone = item.status == ChapterStatus.completed;
+          final isActive = item.status == 'generating';
+          final isDone = item.status == 'completed';
 
-          final parsed = parseChapterId(item.chapterId);
+          final parsed = parseChapterId(item.id);
           final chapterNum = parsed != null ? toChineseNum(parsed.top) : '${i + 1}';
 
           return Padding(
@@ -177,94 +259,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
     );
   }
 
-  Widget _buildBlockContent(GenerateState state, bool isGenerating) {
-    final outline = state.outline;
-    final blocks = state.currentBlocks;
-
-    if (outline.isEmpty && blocks.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _PulseDot(),
-              SizedBox(height: 12),
-              Text('AI 正在规划文档结构...', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final List<Widget> widgets = [];
-    int mainChapterIdx = 0;
-
-    for (int oi = 0; oi < outline.length; oi++) {
-      final item = outline[oi];
-      final chId = item.chapterId;
-      final chapterBlocks = blocks[chId] ?? [];
-
-      // 章节标题
-      final parsed = parseChapterId(chId);
-      final isSub = parsed?.sub != null;
-      if (!isSub) mainChapterIdx++;
-      final chNum = isSub ? '${parsed!.top}.${parsed.sub}' : toChineseNum(mainChapterIdx);
-      final cleanTitle = stripTitleNumber(item.title);
-
-      widgets.add(Padding(
-        padding: EdgeInsets.only(top: oi == 0 ? 0 : 16, bottom: 8),
-        child: isSub
-            ? Text('$chNum $cleanTitle', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.text))
-            : Text('$chNum、$cleanTitle', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
-      ));
-
-      // 章节 blocks
-      int h3Counter = 0;
-      int h4Counter = 0;
-      final isLastChapter = oi == outline.length - 1;
-
-      for (int bi = 0; bi < chapterBlocks.length; bi++) {
-        final block = chapterBlocks[bi];
-        final isLastBlock = isLastChapter && bi == chapterBlocks.length - 1;
-        final showCursor = isLastBlock && isGenerating;
-
-        // heading 编号跟踪
-        if (block.type == BlockType.heading) {
-          final level = block.level ?? 2;
-          if (level == 3) { h3Counter++; h4Counter = 0; }
-          if (level == 4) h4Counter++;
-        }
-
-        // 跳过与章节标题匹配的 heading block
-        if (block.type == BlockType.heading) {
-          final headingText = block.text ?? '';
-          if (stripHeadingNumber(headingText).trim() == cleanTitle) continue;
-        }
-
-        widgets.add(BlockRenderer(
-          block: block,
-          isStreaming: showCursor,
-          chapterIndex: mainChapterIdx,
-          h3Counter: h3Counter,
-          h4Counter: h4Counter,
-        ));
-      }
-
-      if (item.status == ChapterStatus.generating && chapterBlocks.isEmpty) {
-        widgets.add(const Padding(
-          padding: EdgeInsets.symmetric(vertical: 12),
-          child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
-        ));
-      }
-    }
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: widgets);
-  }
-
-  // ===========================================================================
-  // 旧版纯文本布局（direct_llm 兼容）
-  // ===========================================================================
+  // ─── 旧版纯文本布局（兼容无 DSL 数据时）───
 
   Widget _buildLegacyLayout(GenerateState state, bool isGenerating) {
     return SingleChildScrollView(
@@ -305,9 +300,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
     );
   }
 
-  // ===========================================================================
-  // 公共组件
-  // ===========================================================================
+  // ─── 公共组件 ───
 
   Widget _buildSteps() {
     return Padding(
@@ -339,7 +332,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
   }
 
   Widget _buildProgressBar(GenerateState state) {
-    final completed = state.outline.where((o) => o.status == ChapterStatus.completed).length;
+    final completed = state.outline.where((o) => o.status == 'completed').length;
     final total = state.outline.length;
     final progress = total > 0 ? completed / total : state.progress;
     final pctText = '${(progress * 100).round()}%';
@@ -375,7 +368,6 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
   }
 }
 
-/// 脉冲点
 class _PulseDot extends StatefulWidget {
   const _PulseDot();
   @override
@@ -403,7 +395,6 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
   }
 }
 
-/// 小脉冲点（大纲用）
 class _MiniPulseDot extends StatefulWidget {
   const _MiniPulseDot();
   @override
@@ -428,7 +419,6 @@ class _MiniPulseDotState extends State<_MiniPulseDot> with SingleTickerProviderS
   }
 }
 
-/// 闪烁光标
 class _Cursor extends StatefulWidget {
   const _Cursor();
   @override

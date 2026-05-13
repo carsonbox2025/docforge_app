@@ -16,7 +16,7 @@ class AppConstants {
     if (_envHost.isNotEmpty) return _envHost;
     if (kIsWeb) return 'http://localhost:8000';
     if (!kReleaseMode && Platform.isAndroid) return 'http://10.0.2.2';
-    if (kReleaseMode) return 'https://your-production-host.com';
+    if (kReleaseMode) return 'http://61.132.52.22:8084';
     return 'http://localhost:8000';
   }
 
@@ -29,6 +29,10 @@ class AppConstants {
   // BFF auth 路由：走 /aistudio/service/app/docforge/...
   static String get apiLoginUrl =>
       '$apiOrigin/aistudio/service/app/$appKey/auth/login';
+  static String get apiRegisterUrl =>
+      '$apiOrigin/aistudio/service/app/$appKey/auth/register';
+  static String get apiGetMeUrl =>
+      '$apiOrigin/aistudio/service/app/$appKey/auth/me';
   static String get apiSmsSendCodeUrl =>
       '$apiOrigin/aistudio/service/app/$appKey/sms/send-code';
   static String get apiSmsVerifyLoginUrl =>
@@ -39,6 +43,10 @@ class AppConstants {
   static const String refreshTokenKey = 'refresh_token';
   static const String userIdKey = 'user_id';
   static const String themeKey = 'app_theme';
+
+  // Legal URLs
+  static const String termsUrl = 'https://docforge.app/terms';
+  static const String privacyUrl = 'https://docforge.app/privacy';
 
   // Doc types
   static const List<String> docTypes = [
@@ -54,4 +62,18 @@ class AppConstants {
     {'code': 'fr-FR', 'name': 'Français'},
     {'code': 'de-DE', 'name': 'Deutsch'},
   ];
+
+  // Scene APIs
+  static String get scenesListUrl => '$apiBasePath/scenes/list';
+  static String sceneDetailUrl(String id) => '$apiBasePath/scenes/$id';
+  static String sceneGenerateUrl(String id) =>
+      '$apiBasePath/scenes/$id/generate';
+
+  // Payment APIs
+  static String get ordersCreateUrl => '$apiBasePath/payment/orders/create';
+  static String orderDetailUrl(String orderNo) =>
+      '$apiBasePath/payment/orders/$orderNo';
+  static String orderRefundUrl(String orderNo) =>
+      '$apiBasePath/payment/orders/$orderNo/refund';
+  static String get quotasMeUrl => '$apiBasePath/payment/quotas/me';
 }

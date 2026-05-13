@@ -4,10 +4,10 @@ import 'package:dio/dio.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// 任务类型
+/// 任务类型（兼容旧引用）
 enum TaskType { generate, polish, translate }
 
-/// 任务状态
+/// 任务状态（兼容旧引用）
 enum TaskStatus {
   pending,
   running,
@@ -34,7 +34,7 @@ class TaskProgress {
   });
 }
 
-/// 任务状态响应
+/// 任务状态响应（兼容旧引用）
 class TaskStatusData {
   final int id;
   final TaskType taskType;
@@ -65,7 +65,7 @@ class TaskStatusData {
   factory TaskStatusData.fromJson(Map<String, dynamic> json) => TaskStatusData(
         id: json['id'] as int,
         taskType: TaskType.values.firstWhere(
-          (e) => e.name == json['task_type'],
+          (e) => e.name == (json['doc_type'] ?? json['task_type']),
           orElse: () => TaskType.generate,
         ),
         status: TaskStatus.values.firstWhere(
@@ -84,7 +84,7 @@ class TaskStatusData {
 }
 
 class TaskDataSource {
-  /// 提交异步任务
+  /// 提交异步任务 → 统一 /document/submit
   Future<int> submitTask({
     required TaskType taskType,
     required Map<String, dynamic> userInput,
@@ -93,11 +93,13 @@ class TaskDataSource {
     String? polishLevel,
     String? sourceLang,
     String? targetLang,
+    String docType = 'generic',
   }) async {
     final response = await ApiClient.instance.post<Map<String, dynamic>>(
-      '/task/submit',
+      '/document/submit',
       data: {
-        'task_type': taskType.name,
+        'doc_type': docType,
+        'source_type': taskType.name,
         'user_input': userInput,
         if (templateId != null) 'template_id': templateId,
         if (title != null) 'title': title,
@@ -110,13 +112,13 @@ class TaskDataSource {
     if (data['code'] != 200) {
       throw Exception(data['message'] ?? '任务提交失败');
     }
-    return data['data']['task_id'] as int;
+    return data['data']['id'] as int;
   }
 
-  /// 查询任务状态
+  /// 查询任务状态 → GET /document/{id}
   Future<TaskStatusData> getTaskStatus(int taskId) async {
     final response = await ApiClient.instance.get<Map<String, dynamic>>(
-      '/task/$taskId',
+      '/document/$taskId',
     );
     final data = response.data!;
     if (data['code'] != 200) {
@@ -125,61 +127,68 @@ class TaskDataSource {
     return TaskStatusData.fromJson(data['data'] as Map<String, dynamic>);
   }
 
-  /// SSE 实时进度流
-  Stream<TaskProgress> progressStream(int taskId) async* {
-    final dio = ApiClient.instance.dio;
-    final response = await dio.get<ResponseBody>(
-      '/task/$taskId/stream',
-      options: Options(
-        responseType: ResponseType.stream,
-        receiveTimeout: Duration.zero,  // SSE 不设超时，由心跳保活
-      ),
-    );
+  /// SSE 实时进度流 → /document/{id}/stream（独立 Dio 实例，避免占用连接池）
+  Stream<TaskProgress> progressStream(int taskId, {CancelToken? cancelToken}) async* {
+    final dio = Dio(BaseOptions(
+      baseUrl: ApiClient.instance.dio.options.baseUrl,
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 60),
+    ));
+    try {
+      final response = await dio.get<ResponseBody>(
+        '/document/$taskId/stream',
+        options: Options(
+          responseType: ResponseType.stream,
+          receiveTimeout: const Duration(seconds: 60),
+          sendTimeout: const Duration(seconds: 10),
+        ),
+        cancelToken: cancelToken,
+      );
 
-    final stream = response.data!.stream;
-    String buffer = '';
+      final stream = response.data!.stream;
+      String buffer = '';
 
-    await for (final chunk in stream) {
-      buffer += utf8.decode(chunk, allowMalformed: true);
-      final lines = buffer.split('\n');
-      buffer = lines.removeLast();
+      await for (final chunk in stream) {
+        buffer += utf8.decode(chunk, allowMalformed: true);
+        final lines = buffer.split('\n');
+        buffer = lines.removeLast();
 
-      for (final line in lines) {
-        if (line.startsWith('data: ')) {
-          final payload = line.substring(6).trim();
-          if (payload == '[DONE]') return;
+        for (final line in lines) {
+          if (line.startsWith('data: ')) {
+            final payload = line.substring(6).trim();
+            if (payload == '[DONE]') return;
 
-          try {
-            final json = jsonDecode(payload) as Map<String, dynamic>;
-            final progress = (json['progress'] as num?)?.toDouble() ?? 0;
-            if (progress < 0) {
-              // heartbeat
+            try {
+              final json = jsonDecode(payload) as Map<String, dynamic>;
+              final progress = (json['progress'] as num?)?.toDouble() ?? 0;
+              if (progress < 0) continue;
+              yield TaskProgress(
+                progress: progress,
+                message: json['message'] as String? ?? '',
+                detail: json['detail'] as Map<String, dynamic>?,
+              );
+              if (progress >= 1.0) return;
+            } catch (_) {
               continue;
             }
-            yield TaskProgress(
-              progress: progress,
-              message: json['message'] as String? ?? '',
-              detail: json['detail'] as Map<String, dynamic>?,
-            );
-            if (progress >= 1.0) return;
-          } catch (_) {
-            continue;
           }
         }
       }
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) return;
     }
   }
 
-  /// 取消任务
+  /// 取消任务 → POST /document/{id}/cancel
   Future<bool> cancelTask(int taskId) async {
     final response = await ApiClient.instance.post<Map<String, dynamic>>(
-      '/task/$taskId/cancel',
+      '/document/$taskId/cancel',
     );
     final data = response.data!;
     return data['code'] == 200;
   }
 
-  /// 查询任务列表
+  /// 查询任务列表 → GET /document/list
   Future<Map<String, dynamic>> listTasks({
     TaskStatus? status,
     TaskType? taskType,
@@ -191,10 +200,10 @@ class TaskDataSource {
       'page_size': pageSize,
     };
     if (status != null) queryParams['status'] = status.name;
-    if (taskType != null) queryParams['task_type'] = taskType.name;
+    if (taskType != null) queryParams['doc_type'] = taskType.name;
 
     final response = await ApiClient.instance.get<Map<String, dynamic>>(
-      '/task/list',
+      '/document/list',
       queryParameters: queryParams,
     );
     final data = response.data!;
@@ -204,7 +213,7 @@ class TaskDataSource {
     return data['data'] as Map<String, dynamic>;
   }
 
-  /// 获取文档 HTML 预览 URL
+  /// 获取文档预览 URL
   String getPreviewUrl(int documentId) {
     return '${AppConstants.apiBasePath}/preview/$documentId/html';
   }
@@ -221,7 +230,7 @@ class TaskDataSource {
     return data['data'] as Map<String, dynamic>;
   }
 
-  /// 导出文档（通过 document_id）
+  /// 导出文档
   Future<List<int>> exportDocument(int documentId, String format) async {
     final response = await ApiClient.instance.post<List<int>>(
       '/export/word',

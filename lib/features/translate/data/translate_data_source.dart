@@ -3,9 +3,37 @@ import 'package:dio/dio.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/sse/sse_client.dart';
+import '../../generate/data/task_data_source.dart';
 import 'models/translate_models.dart';
 
 class TranslateDataSource {
+  final TaskDataSource _taskDs = TaskDataSource();
+
+  /// 提交翻译任务（通过统一任务服务）
+  Future<int> submitTranslateTask(TranslateRequest request, {String mode = 'quick'}) {
+    return _taskDs.submitTask(
+      taskType: TaskType.translate,
+      userInput: {
+        'text': request.text,
+        'mode': mode,
+      },
+      title: '翻译文档',
+      sourceLang: request.sourceLang.code,
+      targetLang: request.targetLang.code,
+    );
+  }
+
+  /// 任务进度流（SSE）
+  Stream<TaskProgress> translateProgressStream(int taskId) {
+    return _taskDs.progressStream(taskId);
+  }
+
+  /// 查询任务状态
+  Future<TaskStatusData> getTaskStatus(int taskId) {
+    return _taskDs.getTaskStatus(taskId);
+  }
+
+  /// 旧接口兼容：直连 SSE 翻译
   Stream<SseEvent> translateTextStream(TranslateRequest request) {
     return SseClient.connect(
       '${AppConstants.apiBaseUrl}/translate/text',

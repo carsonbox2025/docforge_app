@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import '../../../core/network/api_client.dart';
 import '../../../core/network/api_interceptor.dart';
 import '../../../core/constants/app_constants.dart';
 import 'models/auth_models.dart';
@@ -24,10 +23,10 @@ class AuthRemoteDataSource {
     return AuthResponse.fromJson(response.data['data'] ?? response.data);
   }
 
-  Future<void> sendSmsCode(String phone) async {
+  Future<void> sendSmsCode(String phone, {String type = 'login'}) async {
     await _authDio.post(
       AppConstants.apiSmsSendCodeUrl,
-      data: {'phone': phone, 'type': 'login'},
+      data: {'phone': phone, 'type': type},
     );
   }
 
@@ -39,7 +38,31 @@ class AuthRemoteDataSource {
     return AuthResponse.fromJson(response.data['data'] ?? response.data);
   }
 
-  Future<UserDto> getMe() async {
-    throw UnimplementedError('getMe not available via BFF');
+  Future<AuthResponse> register(
+      String username, String email, String phone, String password, String code) async {
+    final response = await _authDio.post(
+      AppConstants.apiRegisterUrl,
+      data: {
+        'username': username,
+        'email': email,
+        'phone': phone,
+        'password': password,
+        'code': code,
+      },
+    );
+    return AuthResponse.fromJson(response.data['data'] ?? response.data);
+  }
+
+  Future<UserDto> getMe(String token) async {
+    final dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 60),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    ));
+    final response = await dio.get(AppConstants.apiGetMeUrl);
+    return UserDto.fromJson(response.data['data'] as Map<String, dynamic>);
   }
 }

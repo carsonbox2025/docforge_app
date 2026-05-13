@@ -48,7 +48,7 @@ class QuickActions extends StatelessWidget {
             label: '模板库',
             iconBgColor: AppColors.infoBg,
             iconColor: AppColors.info,
-            onTap: () => context.push('/templates'),
+            onTap: () => context.go('/templates'),
           ),
         ],
       ),

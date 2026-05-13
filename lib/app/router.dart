@@ -14,8 +14,8 @@ import '../features/notification/presentation/pages/notification_page.dart';
 import '../features/membership/presentation/pages/subscription_page.dart';
 import '../features/template/presentation/pages/template_gallery_page.dart';
 import '../features/template/presentation/pages/template_preview_page.dart';
-import '../features/history/presentation/pages/history_list_page.dart';
-import '../features/history/presentation/pages/history_detail_page.dart';
+import '../features/document/presentation/pages/document_center_page.dart';
+import '../features/document/presentation/pages/document_detail_page.dart';
 import '../features/glossary/presentation/pages/glossary_page.dart';
 import '../features/search/presentation/pages/search_page.dart';
 import '../features/profile/presentation/pages/settings_page.dart';
@@ -90,10 +90,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         final id = state.pathParameters['id'] ?? '';
         return TemplatePreviewPage(templateId: id);
       }),
-      GoRoute(path: '/history', builder: (_, __) => const HistoryListPage()),
-      GoRoute(path: '/history/:id', builder: (_, state) {
+      GoRoute(path: '/documents', builder: (_, __) => const DocumentCenterPage()),
+      GoRoute(path: '/documents/:id', builder: (_, state) {
         final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-        return HistoryDetailPage(documentId: id);
+        return DocumentDetailPage(docId: id);
       }),
       GoRoute(path: '/glossary', builder: (_, __) => const GlossaryPage()),
       GoRoute(path: '/search', builder: (_, __) => const SearchPage()),

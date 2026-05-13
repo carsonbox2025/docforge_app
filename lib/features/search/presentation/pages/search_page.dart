@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
-import '../../../history/data/models/history_models.dart';
-import '../../../history/data/history_data_source.dart';
+import '../../../document/data/models/document_models.dart';
+import '../../../document/data/document_data_source.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -17,7 +17,7 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final HistoryDataSource _historyDataSource = HistoryDataSource();
+  final DocumentDataSource _documentDataSource = DocumentDataSource();
 
   String _query = '';
   List<String> _searchHistory = [
@@ -27,7 +27,7 @@ class _SearchPageState extends State<SearchPage> {
     '会议纪要',
     '采购招标',
   ];
-  List<HistoryDocument> _results = [];
+  List<DocForgeDocument> _results = [];
   bool _isSearching = false;
 
   @override
@@ -65,13 +65,15 @@ class _SearchPageState extends State<SearchPage> {
 
   Future<void> _performSearch(String query) async {
     // Mock search from history data source
-    final allDocs = await _historyDataSource.getHistoryList();
+    final response = await _documentDataSource.listDocuments(pageSize: 100);
     if (!mounted) return;
+
+    final items = response['items'] as List<dynamic>? ?? [];
+    final allDocs = items.map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>)).toList();
 
     final results = allDocs.where((doc) {
       final q = query.toLowerCase();
       return doc.title.toLowerCase().contains(q) ||
-          doc.category.label.contains(q) ||
           doc.docType.label.contains(q);
     }).toList();
 
@@ -323,7 +325,7 @@ class _SearchPageState extends State<SearchPage> {
                       Row(
                         children: [
                           Text(
-                            doc.category.label,
+                            doc.docType.label,
                             style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                           ),
                           const SizedBox(width: 8),
@@ -334,7 +336,7 @@ class _SearchPageState extends State<SearchPage> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              doc.createdAt,
+                              doc.createdAt ?? '',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 12, color: AppColors.textMuted),

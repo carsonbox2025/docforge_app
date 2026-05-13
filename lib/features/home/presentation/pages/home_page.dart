@@ -1,28 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../payment/data/models/payment_models.dart';
+import '../../../payment/domain/providers/payment_provider.dart';
 import '../widgets/quick_actions.dart';
 import '../widgets/feature_carousel.dart';
 import '../widgets/recent_documents.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends ConsumerState<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () async {
+          ref.invalidate(quotaProvider);
+          await ref.read(quotaProvider.future);
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             // ── Blue header ──
             // Prototype: padding 20px top / 36px bottom
             // We use bottom: 18px here and let QuickActions overlay
@@ -39,7 +49,8 @@ class _HomePageState extends State<HomePage> {
             // ── Quota hint ──
             _buildQuotaHint(),
             const SizedBox(height: 4),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -102,6 +113,11 @@ class _HomePageState extends State<HomePage> {
                 Row(
                   children: [
                     _HeaderIconButton(
+                      icon: Icons.task_outlined,
+                      onTap: () => context.push('/documents'),
+                    ),
+                    const SizedBox(width: 6),
+                    _HeaderIconButton(
                       icon: Icons.search,
                       onTap: () => context.push('/search'),
                     ),
@@ -121,30 +137,73 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildQuotaHint() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.ctaBg,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.cta.withValues(alpha: 0.15)),
+    final quotaAsync = ref.watch(quotaProvider);
+    return quotaAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => _buildQuotaBanner(
+        icon: Icons.info_outline,
+        text: '配额信息加载失败，下拉刷新重试',
+        color: AppColors.textMuted,
       ),
-      child: Row(
-        children: [
-          Icon(Icons.shield_outlined, size: 18, color: AppColors.cta),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '每月 3 次免费生成额度，升级 Pro 解锁无限次',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.cta,
-                fontWeight: FontWeight.w600,
-                height: 1.4,
+      data: (quota) {
+        if (quota.isYearly) {
+          return _buildQuotaBanner(
+            icon: Icons.workspace_premium,
+            text: '年度会员 · 全场景无限使用',
+            color: AppColors.primary,
+          );
+        }
+        if (quota.isPro) {
+          return _buildQuotaBanner(
+            icon: Icons.workspace_premium,
+            text: '${quota.planLabel} · 享受更多权益',
+            color: AppColors.primary,
+            onTap: () => context.push('/subscription'),
+          );
+        }
+        return _buildQuotaBanner(
+          icon: Icons.shield_outlined,
+          text: '部分场景限免体验，升级 Pro 解锁无限次',
+          color: AppColors.cta,
+          onTap: () => context.push('/subscription'),
+        );
+      },
+    );
+  }
+
+  Widget _buildQuotaBanner({
+    required IconData icon,
+    required String text,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: color == AppColors.primary ? AppColors.primaryBg : AppColors.ctaBg,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: color.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

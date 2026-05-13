@@ -14,6 +14,8 @@ class RegisterPage extends ConsumerStatefulWidget {
 }
 
 class _RegisterPageState extends ConsumerState<RegisterPage> {
+  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -23,6 +25,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _usernameController.dispose();
+    _emailController.dispose();
     _phoneController.dispose();
     _codeController.dispose();
     _passwordController.dispose();
@@ -33,7 +37,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     final phone = _phoneController.text.trim();
     if (!RegExp(r'^1\d{10}$').hasMatch(phone)) return;
     try {
-      await ref.read(authProvider.notifier).sendSmsCode(phone);
+      await ref.read(authProvider.notifier).sendSmsCode(phone, type: 'register');
       setState(() { _countdown = 60; });
       _timer = Timer.periodic(const Duration(seconds: 1), (t) {
         setState(() { _countdown--; });
@@ -47,11 +51,14 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   }
 
   Future<void> _register() async {
+    final username = _usernameController.text.trim();
+    final email = _emailController.text.trim();
     final phone = _phoneController.text.trim();
     final code = _codeController.text.trim();
-    if (phone.isEmpty || code.isEmpty) return;
-    // BFF 短信验证登录：手机号不存在时自动注册
-    await ref.read(authProvider.notifier).loginWithSms(phone, code);
+    final password = _passwordController.text;
+
+    if (username.isEmpty || email.isEmpty || phone.isEmpty || code.isEmpty) return;
+    await ref.read(authProvider.notifier).register(username, email, phone, password, code);
   }
 
   @override
@@ -85,6 +92,25 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               const SizedBox(height: 6),
               const Text('注册后即可使用稿搭子的全部功能', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
               const SizedBox(height: 32),
+
+              const Text('用户名', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _usernameController,
+                maxLength: 50,
+                decoration: const InputDecoration(hintText: '请输入用户名（2-50位）', counterText: ''),
+              ),
+              const SizedBox(height: 16),
+
+              const Text('邮箱', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(hintText: '请输入邮箱'),
+              ),
+              const SizedBox(height: 16),
+
               const Text('手机号', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
               TextField(
@@ -94,6 +120,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                 decoration: const InputDecoration(hintText: '请输入手机号', counterText: ''),
               ),
               const SizedBox(height: 16),
+
               const Text('验证码', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
               TextField(
@@ -101,7 +128,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                 keyboardType: TextInputType.number,
                 maxLength: 6,
                 decoration: InputDecoration(
-                  hintText: '请输入验证码',
+                  hintText: '请输入6位验证码',
                   counterText: '',
                   suffixIcon: GestureDetector(
                     onTap: _countdown > 0 ? null : _sendCode,
@@ -116,14 +143,16 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                 ),
               ),
               const SizedBox(height: 16),
+
               const Text('密码（可选）', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               const SizedBox(height: 6),
               TextField(
                 controller: _passwordController,
                 obscureText: true,
-                decoration: const InputDecoration(hintText: '设置登录密码'),
+                decoration: const InputDecoration(hintText: '设置登录密码（可选）'),
               ),
               const SizedBox(height: 32),
+
               SizedBox(
                 width: double.infinity,
                 height: 48,

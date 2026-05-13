@@ -77,6 +77,7 @@ class _InputStage extends ConsumerWidget {
             const _TextInputMode()
           else
             const _DocumentInputMode(),
+          const _TranslateModeSelector(),
           const _GlossarySection(),
           const SizedBox(height: 12),
           const _TranslateButton(),
@@ -1090,5 +1091,104 @@ class _ExportFormatGrid extends ConsumerWidget {
       case ExportFormat.html:
         return Icons.code;
     }
+  }
+}
+
+// ==================== Translate Mode Selector ====================
+
+class _TranslateModeSelector extends ConsumerWidget {
+  const _TranslateModeSelector();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(translateProvider);
+    final notifier = ref.read(translateProvider.notifier);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Row(
+        children: [
+          const Text(
+            '翻译模式',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceHover,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  _TranslateModeChip(
+                    label: '快速翻译',
+                    icon: Icons.bolt,
+                    isActive: state.genMode == 'quick',
+                    onTap: () => notifier.setGenMode('quick'),
+                  ),
+                  _TranslateModeChip(
+                    label: '专业翻译',
+                    icon: Icons.auto_awesome,
+                    isActive: state.genMode == 'professional',
+                    onTap: () => notifier.setGenMode('professional'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TranslateModeChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _TranslateModeChip({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.surface : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: isActive
+                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 2, offset: const Offset(0, 1))]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: isActive ? AppColors.cta : AppColors.textMuted),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActive ? AppColors.cta : AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

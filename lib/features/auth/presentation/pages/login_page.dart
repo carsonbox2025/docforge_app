@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/theme/app_spacing.dart';
-import '../../../../shared/utils/validators.dart';
 import '../../domain/providers/auth_provider.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -16,19 +14,25 @@ class LoginPage extends ConsumerStatefulWidget {
 }
 
 class _LoginPageState extends ConsumerState<LoginPage> {
-  int _currentTab = 0;
+  bool _showSmsLogin = false;
+  final _identifierController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _passwordFocus = FocusNode();
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _codeFocus = FocusNode();
   int _countdown = 0;
   Timer? _timer;
 
   @override
   void dispose() {
     _timer?.cancel();
+    _identifierController.dispose();
+    _passwordController.dispose();
+    _passwordFocus.dispose();
     _phoneController.dispose();
     _codeController.dispose();
-    _passwordController.dispose();
+    _codeFocus.dispose();
     super.dispose();
   }
 
@@ -57,21 +61,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _login() async {
-    final phone = _phoneController.text.trim();
-    if (_currentTab == 0) {
+    if (_showSmsLogin) {
+      final phone = _phoneController.text.trim();
       final code = _codeController.text.trim();
-      if (code.isEmpty) return;
+      if (phone.isEmpty || code.isEmpty) return;
       await ref.read(authProvider.notifier).loginWithSms(phone, code);
     } else {
+      final identifier = _identifierController.text.trim();
       final pwd = _passwordController.text;
-      if (pwd.isEmpty) return;
-      await ref.read(authProvider.notifier).loginWithPassword(phone, pwd);
+      if (identifier.isEmpty || pwd.isEmpty) return;
+      await ref.read(authProvider.notifier).loginWithPassword(identifier, pwd);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
+    final isLoading = ref.watch(authProvider).isLoading;
 
     ref.listen<AuthState>(authProvider, (prev, next) {
       if (next.status == AuthStatus.authenticated) {
@@ -93,14 +98,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               const SizedBox(height: 60),
               _buildBrand(),
               const SizedBox(height: 40),
-              _buildTabs(),
-              const SizedBox(height: 28),
-              if (_currentTab == 0) _buildSmsForm(),
-              if (_currentTab == 1) _buildPasswordForm(),
-              const SizedBox(height: 28),
-              _buildDivider(),
-              const SizedBox(height: 28),
-              _buildSocialLogin(),
+              if (!_showSmsLogin) _buildPasswordForm(isLoading),
+              if (_showSmsLogin) _buildSmsForm(isLoading),
               const SizedBox(height: 24),
               _buildFooter(),
               const SizedBox(height: 32),
@@ -133,47 +132,62 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
-  Widget _buildTabs() {
-    return Row(
+  Widget _buildPasswordForm(bool isLoading) {
+    return Column(
       children: [
-        _tabItem('手机登录', 0),
-        _tabItem('密码登录', 1),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('账号', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _identifierController,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _passwordFocus.requestFocus(),
+              decoration: const InputDecoration(hintText: '用户名 / 手机号 / 邮箱'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('密码', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _passwordController,
+              focusNode: _passwordFocus,
+              obscureText: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _login(),
+              decoration: const InputDecoration(hintText: '请输入密码'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton(
+            onPressed: isLoading ? null : _login,
+            child: isLoading
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text('登 录'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        GestureDetector(
+          onTap: () => setState(() => _showSmsLogin = true),
+          child: const Text(
+            '手机验证码登录',
+            style: TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w500),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _tabItem(String text, int index) {
-    final isActive = _currentTab == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _currentTab = index),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Text(
-                text,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isActive ? AppColors.primary : AppColors.textMuted,
-                ),
-              ),
-            ),
-            Container(
-              height: 2,
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(1),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSmsForm() {
+  Widget _buildSmsForm(bool isLoading) {
     return Column(
       children: [
         Column(
@@ -185,6 +199,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               controller: _phoneController,
               keyboardType: TextInputType.phone,
               maxLength: 11,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _codeFocus.requestFocus(),
               decoration: const InputDecoration(
                 hintText: '请输入手机号',
                 counterText: '',
@@ -200,10 +216,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             const SizedBox(height: 6),
             TextField(
               controller: _codeController,
+              focusNode: _codeFocus,
               keyboardType: TextInputType.number,
               maxLength: 6,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _login(),
               decoration: InputDecoration(
-                hintText: '请输入验证码',
+                hintText: '请输入6位验证码',
                 counterText: '',
                 suffixIcon: GestureDetector(
                   onTap: _countdown > 0 ? null : _sendCode,
@@ -223,99 +242,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,
           height: 48,
           child: ElevatedButton(
-            onPressed: _login,
-            child: const Text('登 录'),
+            onPressed: isLoading ? null : _login,
+            child: isLoading
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text('登 录'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        GestureDetector(
+          onTap: () => setState(() => _showSmsLogin = false),
+          child: const Text(
+            '密码登录',
+            style: TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w500),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildPasswordForm() {
-    return Column(
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('手机号 / 邮箱', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _phoneController,
-              decoration: const InputDecoration(hintText: '请输入手机号或邮箱'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('密码', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(hintText: '请输入密码'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text('忘记密码？', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500)),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _login,
-            child: const Text('登 录'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text('其他方式登录', style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
-        ),
-        const Expanded(child: Divider()),
-      ],
-    );
-  }
-
-  Widget _buildSocialLogin() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _socialBtn(Icons.chat_bubble, const Color(0xFF07C160)),
-        const SizedBox(width: 16),
-        _socialBtn(Icons.chat, const Color(0xFF07C160)),
-        const SizedBox(width: 16),
-        _socialBtn(Icons.code, const Color(0xFF24292F)),
-      ],
-    );
-  }
-
-  Widget _socialBtn(IconData icon, Color color) {
-    return Container(
-      width: 52, height: 52,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        color: AppColors.surface,
-      ),
-      child: Icon(icon, color: color, size: 24),
     );
   }
 
@@ -323,10 +269,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text('还没有账号？', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+        const Text('还没有账号？', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
         GestureDetector(
           onTap: () => context.go('/register'),
-          child: Text('立即注册', style: TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600)),
+          child: const Text('立即注册', style: TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600)),
         ),
       ],
     );

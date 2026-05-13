@@ -87,6 +87,36 @@ class _InputStage extends ConsumerWidget {
                     onChanged: (level) => notifier.setLevel(level),
                   ),
 
+                  // Mode toggle
+                  const SizedBox(height: 4),
+                  _SectionLabel('润色模式'),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceHover,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          _PolishModeChip(
+                            label: '快速润色',
+                            icon: Icons.bolt,
+                            isActive: state.mode == 'quick',
+                            onTap: () => notifier.setMode('quick'),
+                          ),
+                          _PolishModeChip(
+                            label: '专业精修',
+                            icon: Icons.auto_awesome,
+                            isActive: state.mode == 'professional',
+                            onTap: () => notifier.setMode('professional'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                   // Action button
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
@@ -1041,4 +1071,53 @@ class _IconConfig {
     required this.bgColor,
     required this.iconColor,
   });
+}
+
+class _PolishModeChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _PolishModeChip({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.surface : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: isActive
+                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 2, offset: const Offset(0, 1))]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: isActive ? AppColors.success : AppColors.textMuted),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActive ? AppColors.success : AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

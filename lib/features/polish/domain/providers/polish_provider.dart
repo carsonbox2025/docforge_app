@@ -3,14 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import '../../data/models/polish_models.dart';
 import '../../data/polish_data_source.dart';
+import '../../../generate/data/task_data_source.dart';
+import '../../../../shared/models/dsl/dsl_node.dart' show DslNode;
 
-/// 页面阶段
-enum PolishStage {
-  input,
-  result,
-}
+enum PolishStage { input, result }
 
-/// 页面状态
 class PolishState {
   final PolishStage stage;
   final InputMode inputMode;
@@ -21,9 +18,20 @@ class PolishState {
   final String? fileName;
   final String? textContent;
   final bool isProcessing;
-  final String streamingText; // SSE 流式文本（逐字显示）
+  final String streamingText;
   final PolishResult? result;
   final String? errorMessage;
+
+  // 进度
+  final double progress;
+  final String progressMsg;
+
+  // DSL 状态
+  final List<DslNode> dslNodes;
+  final int? taskId;
+
+  // 模式
+  final String mode; // quick / professional
 
   const PolishState({
     this.stage = PolishStage.input,
@@ -38,6 +46,11 @@ class PolishState {
     this.streamingText = '',
     this.result,
     this.errorMessage,
+    this.progress = 0,
+    this.progressMsg = '',
+    this.dslNodes = const [],
+    this.taskId,
+    this.mode = 'quick',
   });
 
   PolishState copyWith({
@@ -53,11 +66,17 @@ class PolishState {
     String? streamingText,
     PolishResult? result,
     String? errorMessage,
+    double? progress,
+    String? progressMsg,
+    List<DslNode>? dslNodes,
+    int? taskId,
+    String? mode,
     bool clearResult = false,
     bool clearError = false,
     bool clearFileName = false,
     bool clearTextContent = false,
     bool clearStreamingText = false,
+    bool clearTaskId = false,
   }) {
     return PolishState(
       stage: stage ?? this.stage,
@@ -72,13 +91,18 @@ class PolishState {
       streamingText: clearStreamingText ? '' : (streamingText ?? this.streamingText),
       result: clearResult ? null : (result ?? this.result),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      progress: progress ?? this.progress,
+      progressMsg: progressMsg ?? this.progressMsg,
+      dslNodes: dslNodes ?? this.dslNodes,
+      taskId: clearTaskId ? null : (taskId ?? this.taskId),
+      mode: mode ?? this.mode,
     );
   }
 }
 
 class PolishNotifier extends StateNotifier<PolishState> {
   final PolishRemoteDataSource _dataSource;
-  StreamSubscription? _sseSubscription;
+  StreamSubscription? _progressSub;
 
   PolishNotifier({required PolishRemoteDataSource dataSource})
       : _dataSource = dataSource,
@@ -86,52 +110,28 @@ class PolishNotifier extends StateNotifier<PolishState> {
 
   @override
   void dispose() {
-    _sseSubscription?.cancel();
+    _progressSub?.cancel();
     super.dispose();
   }
 
-  void setInputMode(InputMode mode) {
-    state = state.copyWith(inputMode: mode);
-  }
+  void setInputMode(InputMode mode) => state = state.copyWith(inputMode: mode);
+  void setLevel(PolishLevel level) => state = state.copyWith(level: level);
+  void setDocType(String docType) => state = state.copyWith(docType: docType);
+  void setExportFormat(ExportFormat format) => state = state.copyWith(exportFormat: format);
+  void setCompareTab(CompareTab tab) => state = state.copyWith(compareTab: tab);
+  void setFileName(String? name) => state = state.copyWith(fileName: name ?? '', clearFileName: name == null);
+  void setTextContent(String text) => state = state.copyWith(textContent: text);
+  void setMode(String mode) => state = state.copyWith(mode: mode);
 
-  void setLevel(PolishLevel level) {
-    state = state.copyWith(level: level);
-  }
-
-  void setDocType(String docType) {
-    state = state.copyWith(docType: docType);
-  }
-
-  void setExportFormat(ExportFormat format) {
-    state = state.copyWith(exportFormat: format);
-  }
-
-  void setCompareTab(CompareTab tab) {
-    state = state.copyWith(compareTab: tab);
-  }
-
-  void setFileName(String? name) {
-    if (name == null) {
-      state = state.copyWith(clearFileName: true);
-    } else {
-      state = state.copyWith(fileName: name);
-    }
-  }
-
-  void setTextContent(String text) {
-    state = state.copyWith(textContent: text);
-  }
-
-  /// 开始润色（调用后端 SSE 流式接口）
+  /// 开始润色（通过统一任务服务）
   Future<void> startPolish() async {
-    // 获取输入文本
     final text = state.textContent;
     if (text == null || text.trim().isEmpty) {
       state = state.copyWith(errorMessage: '请输入或上传需要润色的文本');
       return;
     }
 
-    _sseSubscription?.cancel();
+    _progressSub?.cancel();
     state = state.copyWith(isProcessing: true, clearError: true, clearStreamingText: true);
 
     try {
@@ -141,77 +141,134 @@ class PolishNotifier extends StateNotifier<PolishState> {
         level: state.level,
         docType: state.docType,
         fileName: state.fileName,
+        mode: state.mode,
       );
 
-      final buffer = StringBuffer();
-      final stream = _dataSource.submitPolish(request);
+      final taskId = await _dataSource.submitPolishTask(request);
+      state = state.copyWith(taskId: taskId);
 
-      _sseSubscription = stream.listen(
-        (event) {
-          final json = event.dataAsJson;
-          if (json == null) return;
-
-          final type = json['type'] as String?;
-          if (type == 'delta') {
-            buffer.write(json['text'] as String? ?? '');
-            state = state.copyWith(streamingText: buffer.toString());
-          } else if (type == 'done') {
-            // 用 done 事件中的完整文本覆盖 buffer
-            final polishedText = json['text'] as String? ?? buffer.toString();
-            state = state.copyWith(
-              streamingText: polishedText,
-              isProcessing: false,
-              stage: PolishStage.result,
-              result: _buildResult(polishedText, text),
-            );
-          } else if (type == 'error') {
-            debugPrint('[Polish] Backend error: ${json['message']}');
-            state = state.copyWith(
-              isProcessing: false,
-              errorMessage: json['message'] as String? ?? '润色失败，请重试',
-            );
-          }
-        },
-        onError: (e) {
-          debugPrint('[Polish] SSE error: $e');
-          state = state.copyWith(
-            isProcessing: false,
-            errorMessage: '润色失败，请检查网络连接',
-          );
-        },
-        onDone: () {
-          if (state.isProcessing) {
-            // 流结束但未收到 done 事件，使用已收到的内容
-            final polished = buffer.toString();
-            if (polished.isNotEmpty) {
-              state = state.copyWith(
-                isProcessing: false,
-                stage: PolishStage.result,
-                result: _buildResult(polished, text),
-              );
-            } else {
-              state = state.copyWith(
-                isProcessing: false,
-                errorMessage: '润色失败，未收到结果',
-              );
-            }
-          }
-        },
-      );
+      _listenProgress(taskId, text);
     } catch (e) {
-      debugPrint('[Polish] Error: $e');
+      debugPrint('[Polish] submit error: $e');
       state = state.copyWith(
         isProcessing: false,
-        errorMessage: '润色失败，请重试',
+        errorMessage: '润色提交失败: $e',
       );
     }
   }
 
-  /// 根据润色后文本构建 PolishResult
-  PolishResult _buildResult(String polishedText, String originalText) {
-    // 将原文与润色文本做简单对比，生成 diff segments
-    final paragraphs = _generateDiffParagraphs(originalText, polishedText);
+  void _listenProgress(int taskId, String originalText) {
+    _progressSub?.cancel();
+    final buffer = StringBuffer();
 
+    final stream = _dataSource.polishProgressStream(taskId);
+    _progressSub = stream.listen(
+      (update) {
+        if (!mounted) return;
+
+        // 解析 DSL 更新
+        final detail = update.detail;
+        if (detail != null) {
+          _handleDslUpdate(detail, buffer);
+        }
+
+        state = state.copyWith(
+          progress: update.progress,
+          progressMsg: update.message,
+        );
+      },
+      onDone: () {
+        if (!mounted) return;
+        _onStreamDone(taskId, originalText);
+      },
+      onError: (e) {
+        if (!mounted) return;
+        debugPrint('[Polish] progress error: $e');
+        state = state.copyWith(
+          isProcessing: false,
+          errorMessage: '润色失败，请重试',
+        );
+      },
+    );
+  }
+
+  void _handleDslUpdate(Map<String, dynamic> detail, StringBuffer buffer) {
+    final dslUpdate = detail['dsl_update'] as Map<String, dynamic>?;
+    if (dslUpdate == null) return;
+
+    // 从 DSL nodes 中提取文本
+    final nodeUpdates = dslUpdate['node_updates'] as List<dynamic>?;
+    if (nodeUpdates != null) {
+      var allNodes = <DslNode>[...state.dslNodes];
+
+      for (final update in nodeUpdates) {
+        final u = update as Map<String, dynamic>;
+        final op = u['op'] as String? ?? 'append';
+
+        if (op == 'replace_all') {
+          final rawNodes = u['nodes'] as List<dynamic>? ?? [];
+          allNodes = rawNodes.map((n) => DslNode.fromJson(n as Map<String, dynamic>)).toList();
+        } else if (op == 'append') {
+          final rawNode = u['node'] as Map<String, dynamic>?;
+          if (rawNode != null) {
+            allNodes.add(DslNode.fromJson(rawNode));
+          }
+        }
+      }
+
+      // 从 nodes 提取文本用于 streamingText
+      final texts = allNodes
+          .where((n) => n.text != null && n.text!.isNotEmpty)
+          .map((n) => n.text!)
+          .join('\n\n');
+
+      state = state.copyWith(
+        dslNodes: allNodes,
+        streamingText: texts,
+      );
+    }
+  }
+
+  Future<void> _onStreamDone(int taskId, String originalText) async {
+    try {
+      final status = await _dataSource.getTaskStatus(taskId);
+      if (status.status == TaskStatus.completed) {
+        final polished = state.streamingText;
+        state = state.copyWith(
+          isProcessing: false,
+          stage: PolishStage.result,
+          result: _buildResult(polished, originalText),
+        );
+      } else if (status.status == TaskStatus.failed) {
+        state = state.copyWith(
+          isProcessing: false,
+          errorMessage: status.errorMsg ?? '润色失败',
+        );
+      } else {
+        state = state.copyWith(
+          isProcessing: false,
+          errorMessage: '润色超时',
+        );
+      }
+    } catch (e) {
+      final polished = state.streamingText;
+      if (polished.isNotEmpty) {
+        state = state.copyWith(
+          isProcessing: false,
+          stage: PolishStage.result,
+          result: _buildResult(polished, originalText),
+        );
+      } else {
+        state = state.copyWith(
+          isProcessing: false,
+          errorMessage: '润色失败，未收到结果',
+        );
+      }
+    }
+  }
+
+  PolishResult _buildResult(String polishedText, String originalText) {
+    final paragraphs = _generateDiffParagraphs(originalText, polishedText);
     return PolishResult(
       title: state.fileName ?? '文档润色',
       level: state.level,
@@ -224,111 +281,69 @@ class PolishNotifier extends StateNotifier<PolishState> {
     );
   }
 
-  /// 生成 diff 段落列表（按行对比）
   List<PolishParagraph> _generateDiffParagraphs(String original, String polished) {
     final originalLines = original.split(RegExp(r'\n')).where((l) => l.trim().isNotEmpty).toList();
     final polishedLines = polished.split(RegExp(r'\n')).where((l) => l.trim().isNotEmpty).toList();
-
     final paragraphs = <PolishParagraph>[];
-    final maxLen = originalLines.length > polishedLines.length
-        ? originalLines.length
-        : polishedLines.length;
+    final maxLen = originalLines.length > polishedLines.length ? originalLines.length : polishedLines.length;
 
     for (var i = 0; i < maxLen; i++) {
       final segments = <DiffSegment>[];
-
       if (i < originalLines.length && i < polishedLines.length) {
-        final origLine = originalLines[i].trim();
-        final polLine = polishedLines[i].trim();
-
-        if (origLine == polLine) {
-          // 完全相同
-          segments.add(DiffSegment(type: 'equal', text: origLine));
+        if (originalLines[i].trim() == polishedLines[i].trim()) {
+          segments.add(DiffSegment(type: 'equal', text: originalLines[i].trim()));
         } else {
-          // 有差异：显示删除原文 + 插入润色
-          segments.add(DiffSegment(type: 'delete', text: origLine));
-          segments.add(DiffSegment(type: 'insert', text: polLine));
+          segments.add(DiffSegment(type: 'delete', text: originalLines[i].trim()));
+          segments.add(DiffSegment(type: 'insert', text: polishedLines[i].trim()));
         }
       } else if (i < originalLines.length) {
-        // 仅原文有此行（被删除）
         segments.add(DiffSegment(type: 'delete', text: originalLines[i].trim()));
       } else {
-        // 仅润色有此行（新增）
         segments.add(DiffSegment(type: 'insert', text: polishedLines[i].trim()));
       }
-
-      if (segments.isNotEmpty) {
-        paragraphs.add(PolishParagraph(segments: segments));
-      }
+      if (segments.isNotEmpty) paragraphs.add(PolishParagraph(segments: segments));
     }
-
     return paragraphs;
   }
 
-  /// 统计变更数量
   int _countChanges(List<PolishParagraph> paragraphs) {
     int count = 0;
     for (final para in paragraphs) {
       for (final seg in para.segments) {
-        if (seg.type == 'delete' || seg.type == 'insert') {
-          count++;
-        }
+        if (seg.type == 'delete' || seg.type == 'insert') count++;
       }
     }
     return count;
   }
 
-  /// 回到输入阶段
   void goBackToInput() {
-    _sseSubscription?.cancel();
-    state = state.copyWith(
-      stage: PolishStage.input,
-      clearResult: true,
-      clearStreamingText: true,
-    );
+    _progressSub?.cancel();
+    state = state.copyWith(stage: PolishStage.input, clearResult: true, clearStreamingText: true);
   }
 
-  /// 重新润色（保留输入内容）
   void rePolish() {
-    _sseSubscription?.cancel();
-    state = state.copyWith(
-      stage: PolishStage.input,
-      clearResult: true,
-      clearStreamingText: true,
-    );
+    _progressSub?.cancel();
+    state = state.copyWith(stage: PolishStage.input, clearResult: true, clearStreamingText: true);
   }
 
-  /// 导出润色结果
   Future<void> exportResult() async {
     final result = state.result;
     if (result == null) return;
-
     state = state.copyWith(isProcessing: true);
     try {
-      await _dataSource.exportResult(
-        taskId: result.title, // 使用标题作为标识
-        format: state.exportFormat,
-      );
+      await _dataSource.exportResult(taskId: result.title, format: state.exportFormat);
       state = state.copyWith(isProcessing: false);
     } catch (e) {
       debugPrint('[Polish] Export error: $e');
-      state = state.copyWith(
-        isProcessing: false,
-        errorMessage: '导出失败，请重试',
-      );
+      state = state.copyWith(isProcessing: false, errorMessage: '导出失败');
     }
   }
 }
-
-// ── Providers ──
 
 final polishDataSourceProvider = Provider<PolishRemoteDataSource>((ref) {
   return PolishRemoteDataSource();
 });
 
-final polishProvider =
-    StateNotifierProvider<PolishNotifier, PolishState>((ref) {
-  return PolishNotifier(
-    dataSource: ref.read(polishDataSourceProvider),
-  );
+final polishProvider = StateNotifierProvider<PolishNotifier, PolishState>((ref) {
+  return PolishNotifier(dataSource: ref.read(polishDataSourceProvider));
 });

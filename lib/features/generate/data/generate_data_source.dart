@@ -12,9 +12,14 @@ class GenerateDataSource {
       userInput: {
         'content': request.content,
         'language': request.language.code,
+        'mode': request.mode,
+        if (request.sceneId != null) 'scene_id': request.sceneId,
+        if (request.layer != null) 'layer': request.layer,
+        if (request.fieldsData != null) 'fields_data': request.fieldsData,
       },
       templateId: request.templateId,
       title: request.title,
+      docType: request.docType,
     );
   }
 
@@ -34,8 +39,8 @@ class GenerateDataSource {
   }
 
   /// 导出文档（通过 document_id）
-  Future<List<int>> exportDocument(int documentId) async {
-    return _taskDs.exportDocument(documentId, 'docx');
+  Future<List<int>> exportDocument(int documentId, [String format = 'docx']) async {
+    return _taskDs.exportDocument(documentId, format);
   }
 
   /// 获取预览 URL

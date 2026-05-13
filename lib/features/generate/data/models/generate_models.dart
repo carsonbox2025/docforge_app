@@ -48,6 +48,11 @@ class GenerateRequest {
   final DocLanguage language;
   final String? title;
   final bool outlineOnly;
+  final String mode; // quick / professional
+  final String docType; // contract/bid/resume/...
+  final String? sceneId;
+  final int? layer;
+  final Map<String, String>? fieldsData;
 
   const GenerateRequest({
     required this.templateId,
@@ -55,12 +60,26 @@ class GenerateRequest {
     required this.language,
     this.title,
     this.outlineOnly = false,
+    this.mode = 'quick',
+    this.docType = 'contract',
+    this.sceneId,
+    this.layer,
+    this.fieldsData,
   });
 
   Map<String, dynamic> toJson() => {
+        'doc_type': docType,
+        'source_type': 'generate',
         'template_id': templateId,
-        'user_input': {'content': content, 'language': language.code},
+        'user_input': {
+          'content': content,
+          'language': language.code,
+          'mode': mode,
+        },
         if (title != null) 'title': title,
+        if (sceneId != null) 'scene_id': sceneId,
+        if (layer != null) 'layer': layer,
+        if (fieldsData != null) 'fields_data': fieldsData,
       };
 }
 
