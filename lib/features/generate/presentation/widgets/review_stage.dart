@@ -127,12 +127,6 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
         Expanded(
           child: _buildPreview(state),
         ),
-        // 导出格式
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text('选择导出格式', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text)),
-        ),
-        _buildFormatGrid(state, notifier),
         // 操作按钮
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -167,7 +161,7 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
                   height: 48,
                   child: ElevatedButton(
                     onPressed: state.documentId != null && !state.isExporting
-                        ? () => notifier.exportDocument()
+                        ? () => _showExportDialog(context, notifier)
                         : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
@@ -284,45 +278,70 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
     );
   }
 
-  Widget _buildFormatGrid(GenerateState state, GenerateNotifier notifier) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: ExportFormat.values.map((fmt) {
-          final isSelected = state.selectedFormat == fmt;
-          final (iconBgColor, iconColor) = switch (fmt) {
-            ExportFormat.docx => (AppColors.primaryBg, AppColors.primary),
-            ExportFormat.pdf => (AppColors.errorBg, AppColors.error),
-            ExportFormat.html => (AppColors.ctaBg, AppColors.cta),
-          };
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => notifier.selectExportFormat(fmt),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 5),
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primaryBg : AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: isSelected ? AppColors.primary : AppColors.border, width: 1.5),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(color: iconBgColor, borderRadius: BorderRadius.circular(AppRadius.sm)),
-                      child: Icon(fmt.icon, size: 20, color: iconColor),
+  void _showExportDialog(BuildContext context, GenerateNotifier notifier) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('选择导出格式', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+              const SizedBox(height: 16),
+              ...ExportFormat.values.map((fmt) {
+                final (iconBgColor, iconColor) = switch (fmt) {
+                  ExportFormat.docx => (AppColors.primaryBg, AppColors.primary),
+                  ExportFormat.pdf => (AppColors.errorBg, AppColors.error),
+                  ExportFormat.html => (AppColors.ctaBg, AppColors.cta),
+                };
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      notifier.selectExportFormat(fmt);
+                      notifier.exportDocument();
+                    },
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(color: iconBgColor, borderRadius: BorderRadius.circular(AppRadius.sm)),
+                            child: Icon(fmt.icon, size: 22, color: iconColor),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(fmt.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text)),
+                                Text(fmt.extension, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(fmt.label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text)),
-                    Text(fmt.extension, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.textMuted)),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
       ),
     );
   }
