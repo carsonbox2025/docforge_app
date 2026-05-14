@@ -50,6 +50,7 @@ class TaskStatusData {
   final Map<String, dynamic>? resultData;
   final String? errorMsg;
   final int? documentId;
+  final String? title;
   final String? createdAt;
   final String? completedAt;
 
@@ -63,6 +64,7 @@ class TaskStatusData {
     this.resultData,
     this.errorMsg,
     this.documentId,
+    this.title,
     this.createdAt,
     this.completedAt,
   });
@@ -83,6 +85,7 @@ class TaskStatusData {
         resultData: json['result_data'] as Map<String, dynamic>?,
         errorMsg: json['error_msg'] as String?,
         documentId: (json['document_id'] as int?) ?? (json['id'] as int?),
+        title: json['title'] as String?,
         createdAt: json['created_at'] as String?,
         completedAt: json['completed_at'] as String?,
       );

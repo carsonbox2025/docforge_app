@@ -284,6 +284,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           progress: 1.0,
           documentId: status.documentId,
           resultData: status.resultData,
+          docTitle: status.title?.isNotEmpty == true ? status.title : null,
         );
       } else if (status.status == TaskStatus.failed) {
         _log('[Generate] failed: errorMsg=${status.errorMsg}');
@@ -330,6 +331,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
               progress: 1.0,
               documentId: status.documentId,
               resultData: status.resultData,
+              docTitle: status.title?.isNotEmpty == true ? status.title : null,
             );
           } else if (status.status == TaskStatus.failed) {
             state = state.copyWith(
@@ -417,13 +419,24 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
 
     state = state.copyWith(isExporting: true);
     try {
+      // 从 API 获取最新标题（避免内存状态时序问题）
+      String title = state.docTitle;
+      try {
+        final status = await _dataSource.getTaskStatus(docId);
+        if (status.title != null && status.title!.isNotEmpty) {
+          title = status.title!;
+          if (mounted) state = state.copyWith(docTitle: title);
+        }
+      } catch (_) {}
+
+      if (title.isEmpty) {
+        title = state.selectedScene?.name ?? 'document';
+      }
+
       final bytes = await _dataSource.exportDocument(docId);
-      final title = state.docTitle.isNotEmpty
-          ? state.docTitle
-          : state.selectedScene?.name ?? 'document';
       await FileExporter.saveAndShare(
         bytes: Uint8List.fromList(bytes),
-        fileName: '$title.${state.selectedFormat.extension}',
+        fileName: '$title${state.selectedFormat.extension}',
         subject: title,
       );
     } catch (e) {
@@ -436,7 +449,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       }
       return;
     }
-    if (mounted) state = state.copyWith(isExporting: false);
+    if (mounted) state = state.copyWith(isExporting: false, error: null);
   }
 
   /// 获取预览 URL
