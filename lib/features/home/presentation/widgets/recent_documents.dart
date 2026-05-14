@@ -100,9 +100,9 @@ class _RecentDocumentsState extends ConsumerState<RecentDocuments> {
         children: [
           const Text('开始你的第一份文档', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
           const SizedBox(height: 4),
-          Text('AI 帮你写，你来做决定', style: TextStyle(fontSize: 13, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
+          const Text('AI 帮你写，你来做决定', style: TextStyle(fontSize: 13, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
           const SizedBox(height: 20),
-          Row(
+          const Row(
             children: [
               _GuideStep(icon: Icons.edit_note, label: '描述需求', color: AppColors.primary),
               _GuideArrow(),
@@ -132,7 +132,7 @@ class _RecentDocumentsState extends ConsumerState<RecentDocuments> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.description_outlined, size: 14, color: AppColors.textMuted),
+                const Icon(Icons.description_outlined, size: 14, color: AppColors.textMuted),
                 const SizedBox(width: 4),
                 Text('或从模板开始', style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w500,
                     decoration: TextDecoration.underline, decorationColor: AppColors.textMuted.withValues(alpha: 0.4))),
@@ -307,7 +307,7 @@ class _GuideStep extends StatelessWidget {
             child: Icon(icon, size: 22, color: color),
           ),
           const SizedBox(height: 6),
-          Text(label, style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -318,8 +318,8 @@ class _GuideArrow extends StatelessWidget {
   const _GuideArrow();
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
+    return const Padding(
+      padding: EdgeInsets.only(top: 16),
       child: Icon(Icons.chevron_right, size: 16, color: AppColors.textMuted),
     );
   }

@@ -1,7 +1,7 @@
-/// DocDSL 统一渲染器 — 将 DslNode 列表渲染为 Flutter Widget 树
-///
-/// 支持流式模式（最后一个 paragraph 显示打字光标）
-/// 支持所有 15 种节点类型的渲染
+// DocDSL 统一渲染器 — 将 DslNode 列表渲染为 Flutter Widget 树
+//
+// 支持流式模式（最后一个 paragraph 显示打字光标）
+// 支持所有 15 种节点类型的渲染
 
 import 'package:flutter/material.dart';
 import '../../models/dsl/dsl_node.dart';
@@ -363,14 +363,15 @@ class _ImageWidget extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             child: hasUrl
                 ? Image.network(
-                    url!,
+                    url,
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => _imagePlaceholder(Icons.broken_image, '图片加载失败'),
+                    errorBuilder: (_, _, _) => _imagePlaceholder(Icons.broken_image, '图片加载失败'),
                     loadingBuilder: (_, child, loadingProgress) {
                       if (loadingProgress == null) return child;
+                      final total = loadingProgress.expectedTotalBytes;
                       return _imagePlaceholder(
                         Icons.hourglass_top,
-                        '加载中 ${loadingProgress.expectedTotalBytes != null ? "${(loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! * 100).round()}%" : ""}',
+                        '加载中 ${total != null ? "${(loadingProgress.cumulativeBytesLoaded / total * 100).round()}%" : ""}',
                       );
                     },
                   )
@@ -430,9 +431,9 @@ class _ChartWidget extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             child: hasUrl
                 ? Image.network(
-                    url!,
+                    url,
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => _chartPlaceholder(),
+                    errorBuilder: (_, _, _) => _chartPlaceholder(),
                     loadingBuilder: (_, child, loadingProgress) {
                       if (loadingProgress == null) return child;
                       return _chartPlaceholder();

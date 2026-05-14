@@ -16,8 +16,8 @@ class PolishPage extends ConsumerWidget {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
       child: state.stage == PolishStage.input
-          ? _InputStage(key: const ValueKey('input'))
-          : _ResultStage(key: const ValueKey('result')),
+          ? const _InputStage(key: ValueKey('input'))
+          : const _ResultStage(key: ValueKey('result')),
     );
   }
 }
@@ -73,7 +73,7 @@ class _InputStage extends ConsumerWidget {
 
                   // Document type
                   const SizedBox(height: 4),
-                  _SectionLabel('文档类型'),
+                  const _SectionLabel('文档类型'),
                   _DocTypePills(
                     selected: state.docType,
                     onChanged: (type) => notifier.setDocType(type),
@@ -81,7 +81,7 @@ class _InputStage extends ConsumerWidget {
 
                   // Polish level
                   const SizedBox(height: 4),
-                  _SectionLabel('润色强度'),
+                  const _SectionLabel('润色强度'),
                   _LevelSelector(
                     selectedLevel: state.level,
                     onChanged: (level) => notifier.setLevel(level),
@@ -89,7 +89,7 @@ class _InputStage extends ConsumerWidget {
 
                   // Mode toggle
                   const SizedBox(height: 4),
-                  _SectionLabel('润色模式'),
+                  const _SectionLabel('润色模式'),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                     child: Container(
@@ -264,9 +264,9 @@ class _UploadZone extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
+            const Text(
               '支持 .docx .pdf .txt .md，最大 20MB',
-              style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              style: TextStyle(fontSize: 12, color: AppColors.textMuted),
             ),
           ],
         ),
@@ -995,7 +995,7 @@ class _ExportFormatSelector extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       fmt.label,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: AppColors.text,
@@ -1041,19 +1041,19 @@ class _FormatIcon extends StatelessWidget {
   _IconConfig _iconConfig() {
     switch (format) {
       case ExportFormat.docx:
-        return _IconConfig(
+        return const _IconConfig(
           icon: Icons.description_outlined,
           bgColor: AppColors.successBg,
           iconColor: AppColors.success,
         );
       case ExportFormat.pdf:
-        return _IconConfig(
+        return const _IconConfig(
           icon: Icons.picture_as_pdf_outlined,
           bgColor: AppColors.errorBg,
           iconColor: AppColors.error,
         );
       case ExportFormat.html:
-        return _IconConfig(
+        return const _IconConfig(
           icon: Icons.code,
           bgColor: AppColors.ctaBg,
           iconColor: AppColors.cta,

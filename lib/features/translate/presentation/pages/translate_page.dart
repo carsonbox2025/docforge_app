@@ -750,12 +750,12 @@ class _ResultStage extends ConsumerWidget {
             ),
           ),
           // Preview header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   '翻译预览',
                   style: TextStyle(
                     fontSize: 13,
@@ -763,7 +763,7 @@ class _ResultStage extends ConsumerWidget {
                     color: AppColors.text,
                   ),
                 ),
-                const Row(
+                Row(
                   children: [
                     Icon(Icons.check_circle,
                         size: 14, color: AppColors.success),

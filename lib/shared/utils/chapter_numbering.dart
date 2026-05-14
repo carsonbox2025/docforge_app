@@ -1,4 +1,4 @@
-/// 章节编号工具 — 对齐 web 端 chapterNumbering.ts
+// 章节编号工具 — 对齐 web 端 chapterNumbering.ts
 
 const _chineseDigits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../payment/data/models/payment_models.dart';
 import '../../../payment/domain/providers/payment_provider.dart';
 import '../widgets/quick_actions.dart';
 import '../widgets/feature_carousel.dart';
@@ -89,9 +88,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       AppConstants.appName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -140,7 +139,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final quotaAsync = ref.watch(quotaProvider);
     return quotaAsync.when(
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => _buildQuotaBanner(
+      error: (_, _) => _buildQuotaBanner(
         icon: Icons.info_outline,
         text: '配额信息加载失败，下拉刷新重试',
         color: AppColors.textMuted,

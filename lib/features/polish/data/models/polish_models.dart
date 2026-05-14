@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 export '../../../../shared/models/export_format.dart';
 
 /// 润色强度

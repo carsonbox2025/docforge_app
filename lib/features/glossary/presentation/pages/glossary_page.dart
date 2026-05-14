@@ -180,7 +180,7 @@ class GlossaryPage extends ConsumerWidget {
                   const Spacer(),
                   GestureDetector(
                     onTap: () => Navigator.pop(ctx),
-                    child: Icon(Icons.close, size: 20, color: AppColors.textMuted),
+                    child: const Icon(Icons.close, size: 20, color: AppColors.textMuted),
                   ),
                 ],
               ),
@@ -356,7 +356,7 @@ class GlossaryPage extends ConsumerWidget {
                   const Spacer(),
                   GestureDetector(
                     onTap: () => Navigator.pop(ctx),
-                    child: Icon(Icons.close, size: 20, color: AppColors.textMuted),
+                    child: const Icon(Icons.close, size: 20, color: AppColors.textMuted),
                   ),
                 ],
               ),
@@ -369,7 +369,7 @@ class GlossaryPage extends ConsumerWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.translate, size: 14, color: AppColors.primary),
+                    const Icon(Icons.translate, size: 14, color: AppColors.primary),
                     const SizedBox(width: 6),
                     Text(
                       entry.languagePairLabel,
@@ -526,8 +526,8 @@ class _GlossaryCard extends StatelessWidget {
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text),
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Icon(Icons.arrow_forward, size: 14, color: AppColors.textMuted),
                     ),
                     Flexible(
@@ -570,7 +570,7 @@ class _GlossaryCard extends StatelessWidget {
           // Actions
           PopupMenuButton<String>(
             padding: EdgeInsets.zero,
-            icon: Icon(Icons.more_vert, size: 18, color: AppColors.textMuted),
+            icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textMuted),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
             onSelected: (value) {
               if (value == 'edit') onEdit();

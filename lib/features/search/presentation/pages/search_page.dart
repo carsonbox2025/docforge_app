@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../shared/widgets/common_widgets.dart';
 import '../../../document/data/models/document_models.dart';
 import '../../../document/data/document_data_source.dart';
 
@@ -156,14 +154,14 @@ class _SearchPageState extends State<SearchPage> {
                     decoration: InputDecoration(
                       hintText: '搜索文档...',
                       hintStyle: const TextStyle(fontSize: 14, color: AppColors.textMuted),
-                      prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textMuted),
+                      prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textMuted),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? GestureDetector(
                               onTap: () {
                                 _searchController.clear();
                                 _onSearch('');
                               },
-                              child: Icon(Icons.close, size: 16, color: AppColors.textMuted),
+                              child: const Icon(Icons.close, size: 16, color: AppColors.textMuted),
                             )
                           : null,
                       border: InputBorder.none,
@@ -240,7 +238,7 @@ class _SearchPageState extends State<SearchPage> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.history, size: 12, color: AppColors.textMuted),
+                      const Icon(Icons.history, size: 12, color: AppColors.textMuted),
                       const SizedBox(width: 5),
                       Text(
                         tag,

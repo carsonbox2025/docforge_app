@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/providers/generate_provider.dart';
-import '../../../../shared/models/dsl/dsl_node.dart' show DslNode;
 import '../../../../shared/widgets/feature_header.dart';
 import '../../../../shared/widgets/dsl/dsl_renderer.dart';
 import '../../../../shared/utils/chapter_numbering.dart';
@@ -89,12 +88,12 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
             ),
             child: Row(
               children: [
-                Icon(Icons.error_outline, size: 16, color: AppColors.error),
+                const Icon(Icons.error_outline, size: 16, color: AppColors.error),
                 const SizedBox(width: 8),
-                Expanded(child: Text(state.error!, style: TextStyle(fontSize: 12, color: AppColors.error))),
+                Expanded(child: Text(state.error!, style: const TextStyle(fontSize: 12, color: AppColors.error))),
                 TextButton(
                   onPressed: () => notifier.backToInput(),
-                  child: Text('返回修改', style: TextStyle(fontSize: 12, color: AppColors.error)),
+                  child: const Text('返回修改', style: TextStyle(fontSize: 12, color: AppColors.error)),
                 ),
               ],
             ),
@@ -322,12 +321,10 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
           if (isGenerating)
             TextButton.icon(
               onPressed: () => _confirmCancel(notifier),
-              icon: Icon(Icons.stop_circle_outlined, size: 18, color: AppColors.textMuted),
-              label: Text('取消', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+              icon: const Icon(Icons.stop_circle_outlined, size: 18, color: AppColors.textMuted),
+              label: const Text('取消', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               ),
             ),
         ],
@@ -336,6 +333,9 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
   }
 
   void _confirmCancel(GenerateNotifier notifier) {
+    final currentStatus = ref.read(generateProvider).status;
+    if (currentStatus == GenerationStatus.complete) return;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -351,7 +351,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
               Navigator.pop(ctx);
               notifier.cancelGenerate();
             },
-            child: Text('确定取消', style: TextStyle(color: AppColors.error)),
+            child: const Text('确定取消', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),

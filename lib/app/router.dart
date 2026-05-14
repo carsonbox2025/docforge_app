@@ -32,7 +32,7 @@ class _AuthListenable extends ChangeNotifier {
 final routerProvider = Provider<GoRouter>((ref) {
   final authNotifier = _AuthListenable();
 
-  ref.listen(authProvider, (_, __) {
+  ref.listen(authProvider, (_, _) {
     authNotifier.notify();
   });
 
@@ -53,53 +53,53 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/login', builder: (_, __) => const LoginPage()),
-      GoRoute(path: '/register', builder: (_, __) => const RegisterPage()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
+      GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),
 
       ShellRoute(
-        builder: (_, __, child) => AppShell(child: child),
+        builder: (_, _, child) => AppShell(child: child),
         routes: [
           StatefulShellRoute.indexedStack(
-            builder: (_, __, navigationShell) =>
+            builder: (_, _, navigationShell) =>
                 AppNavigationShell(navigationShell: navigationShell),
             branches: [
               StatefulShellBranch(routes: [
-                GoRoute(path: '/', builder: (_, __) => const HomePage()),
+                GoRoute(path: '/', builder: (_, _) => const HomePage()),
               ]),
               StatefulShellBranch(routes: [
-                GoRoute(path: '/generate', builder: (_, __) => const GeneratePage()),
+                GoRoute(path: '/generate', builder: (_, _) => const GeneratePage()),
               ]),
               StatefulShellBranch(routes: [
-                GoRoute(path: '/polish', builder: (_, __) => const PolishPage()),
+                GoRoute(path: '/polish', builder: (_, _) => const PolishPage()),
               ]),
               StatefulShellBranch(routes: [
-                GoRoute(path: '/translate', builder: (_, __) => const TranslatePage()),
+                GoRoute(path: '/translate', builder: (_, _) => const TranslatePage()),
               ]),
               StatefulShellBranch(routes: [
-                GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
+                GoRoute(path: '/profile', builder: (_, _) => const ProfilePage()),
               ]),
             ],
           ),
         ],
       ),
 
-      GoRoute(path: '/notifications', builder: (_, __) => const NotificationPage()),
-      GoRoute(path: '/subscription', builder: (_, __) => const SubscriptionPage()),
-      GoRoute(path: '/templates', builder: (_, __) => const TemplateGalleryPage()),
+      GoRoute(path: '/notifications', builder: (_, _) => const NotificationPage()),
+      GoRoute(path: '/subscription', builder: (_, _) => const SubscriptionPage()),
+      GoRoute(path: '/templates', builder: (_, _) => const TemplateGalleryPage()),
       GoRoute(path: '/templates/:id', builder: (_, state) {
         final id = state.pathParameters['id'] ?? '';
         return TemplatePreviewPage(templateId: id);
       }),
-      GoRoute(path: '/documents', builder: (_, __) => const DocumentCenterPage()),
+      GoRoute(path: '/documents', builder: (_, _) => const DocumentCenterPage()),
       GoRoute(path: '/documents/:id', builder: (_, state) {
         final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
         return DocumentDetailPage(docId: id);
       }),
-      GoRoute(path: '/glossary', builder: (_, __) => const GlossaryPage()),
-      GoRoute(path: '/search', builder: (_, __) => const SearchPage()),
-      GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
-      GoRoute(path: '/usage', builder: (_, __) => const UsagePage()),
-      GoRoute(path: '/drafts', builder: (_, __) => const DraftsPage()),
+      GoRoute(path: '/glossary', builder: (_, _) => const GlossaryPage()),
+      GoRoute(path: '/search', builder: (_, _) => const SearchPage()),
+      GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
+      GoRoute(path: '/usage', builder: (_, _) => const UsagePage()),
+      GoRoute(path: '/drafts', builder: (_, _) => const DraftsPage()),
     ],
   );
 });

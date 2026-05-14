@@ -15,6 +15,8 @@ class _FeatureCarouselState extends State<FeatureCarousel>
   late PageController _pageCtrl;
   int _currentPage = 0;
   Timer? _autoPlayTimer;
+  Timer? _userSwipePauseTimer;
+  bool _isAutoPlaying = false;
 
   static const _slides = <_CarouselSlide>[
     _CarouselSlide(
@@ -61,6 +63,7 @@ class _FeatureCarouselState extends State<FeatureCarousel>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _autoPlayTimer?.cancel();
+    _userSwipePauseTimer?.cancel();
     _pageCtrl.dispose();
     super.dispose();
   }
@@ -76,14 +79,24 @@ class _FeatureCarouselState extends State<FeatureCarousel>
 
   void _startAutoPlay() {
     _autoPlayTimer?.cancel();
+    if (_slides.isEmpty) return;
     _autoPlayTimer = Timer.periodic(const Duration(milliseconds: 3500), (_) {
       if (!_pageCtrl.hasClients) return;
       final next = (_currentPage + 1) % _slides.length;
+      _isAutoPlaying = true;
       _pageCtrl.animateToPage(
         next,
         duration: const Duration(milliseconds: 450),
         curve: Curves.ease,
       );
+    });
+  }
+
+  void _onUserSwipe() {
+    _autoPlayTimer?.cancel();
+    _userSwipePauseTimer?.cancel();
+    _userSwipePauseTimer = Timer(const Duration(seconds: 8), () {
+      _startAutoPlay();
     });
   }
 
@@ -101,7 +114,11 @@ class _FeatureCarouselState extends State<FeatureCarousel>
                 controller: _pageCtrl,
                 onPageChanged: (i) {
                   setState(() => _currentPage = i);
-                  _startAutoPlay();
+                  if (_isAutoPlaying) {
+                    _isAutoPlaying = false;
+                  } else {
+                    _onUserSwipe();
+                  }
                 },
                 itemCount: _slides.length,
                 itemBuilder: (ctx, i) => _buildSlideCard(_slides[i]),

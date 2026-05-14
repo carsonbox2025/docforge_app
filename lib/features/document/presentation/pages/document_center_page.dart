@@ -64,6 +64,9 @@ class _DocumentCenterPageState extends ConsumerState<DocumentCenterPage>
 
   void _onTabChange() {
     if (!_tabCtrl.indexIsChanging) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
       ref.read(documentListProvider.notifier).load(
             tab: DocCenterTab.values[_tabCtrl.index],
           );
@@ -97,8 +100,8 @@ class _DocumentCenterPageState extends ConsumerState<DocumentCenterPage>
           ? ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: 5,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, __) => const CardShimmer(),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (_, _) => const CardShimmer(),
             )
           : state.error != null
               ? _buildError(state.error!)
@@ -110,7 +113,7 @@ class _DocumentCenterPageState extends ConsumerState<DocumentCenterPage>
                         controller: _scrollController,
                         padding: const EdgeInsets.all(16),
                         itemCount: state.items.length + (_isLoadingMore ? 1 : 0),
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (_, i) {
                           if (i == state.items.length) {
                             return const Padding(

@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show File;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/models/dsl/dsl_node.dart';
 import '../../../../shared/widgets/dsl/dsl_renderer.dart';
 import '../../data/document_data_source.dart';
@@ -27,6 +26,7 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
   List<DslOutline> _outline = [];
   bool _isStreaming = false;
   bool _initialized = false;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -37,6 +37,7 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
       final state = ref.read(documentDetailProvider(widget.docId));
       final doc = state.document;
       if (doc != null && !_initialized) {
+        _initialized = true;
         _updateFromDocument(doc);
       }
     });
@@ -50,7 +51,10 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
     ref.listen(documentDetailProvider(widget.docId), (prev, next) {
       final d = next.document;
       if (d == null) return;
-      _updateFromDocument(d);
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(const Duration(milliseconds: 100), () {
+        if (mounted) _updateFromDocument(d);
+      });
     });
 
     return Scaffold(
@@ -228,6 +232,8 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
 
     // 已完成：从 dslContent 提取（优先用最终数据）
     if (doc.status.isTerminal && doc.dslContent != null) {
+      _sectionNodes.clear();
+      _sectionTitles.clear();
       _parseDslContent(doc.dslContent);
       setState(() {});
       return;
@@ -349,19 +355,18 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
       final allNodes = <DslNode>[];
       for (final child in childrenRaw) {
         final c = child as Map<String, dynamic>;
-        final node = DslNode.fromJson(c);
-        if (node.type == DslNodeType.section) {
-          // section 节点直接加入
-          allNodes.add(node);
-        } else {
-          // 非 section 节点直接加入
-          allNodes.add(node);
-        }
+        allNodes.add(DslNode.fromJson(c));
       }
       _nodes = allNodes;
     } catch (e) {
       debugPrint('[DocumentDetail] parseDslContent error: $e');
     }
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
   }
 
   void _confirmCancel(int docId) {
@@ -432,7 +437,7 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('导出失败: $e')),
+        const SnackBar(content: Text('导出失败，请检查网络后重试')),
       );
     }
   }

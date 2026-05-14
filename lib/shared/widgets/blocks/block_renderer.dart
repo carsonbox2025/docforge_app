@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/dsl/document_block.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../utils/chapter_numbering.dart';
 
 class BlockRenderer extends StatelessWidget {
   final DocumentBlock block;
@@ -154,7 +153,7 @@ class _TableBlock extends StatelessWidget {
     final rows = block.rows ?? [];
     if (headers.isEmpty && rows.isEmpty) return const SizedBox.shrink();
 
-    final allCols = headers.length > 0 ? headers.length : (rows.isNotEmpty ? rows[0].length : 0);
+    final allCols = headers.isNotEmpty ? headers.length : (rows.isNotEmpty ? rows[0].length : 0);
     if (allCols == 0) return const SizedBox.shrink();
 
     return Container(
@@ -279,15 +278,15 @@ class _QuoteBlock extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         border: Border(left: BorderSide(color: AppColors.primary, width: 3)),
         color: AppColors.surface,
-        borderRadius: const BorderRadius.only(topRight: Radius.circular(4), bottomRight: Radius.circular(4)),
+        borderRadius: BorderRadius.only(topRight: Radius.circular(4), bottomRight: Radius.circular(4)),
       ),
       child: Row(
         children: [
           Expanded(
-            child: Text(text, style: TextStyle(fontSize: 13, color: AppColors.textMuted, height: 1.6, fontStyle: FontStyle.italic)),
+            child: Text(text, style: const TextStyle(fontSize: 13, color: AppColors.textMuted, height: 1.6, fontStyle: FontStyle.italic)),
           ),
           if (isStreaming) const _StreamingCursor(),
         ],

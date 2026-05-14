@@ -6,6 +6,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import '../../../../shared/widgets/payment_channel_card.dart';
 import '../../../payment/data/models/payment_models.dart';
 import '../../../scene/domain/providers/scene_provider.dart';
 import '../../data/models/membership_models.dart';
@@ -121,9 +122,9 @@ class SubscriptionPage extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _StatItem(value: '∞', label: '文档生成'),
+              const _StatItem(value: '∞', label: '文档生成'),
               _StatItem(value: scenesCount, label: '专业场景'),
-              _StatItem(value: '6', label: '语言翻译'),
+              const _StatItem(value: '6', label: '语言翻译'),
             ],
           ),
         ],
@@ -257,6 +258,36 @@ class SubscriptionPage extends ConsumerWidget {
     return Consumer(
       builder: (context, ref, _) {
         final scenesAsync = ref.watch(sceneListProvider);
+
+        // loading 态显示骨架占位
+        if (scenesAsync.isLoading) {
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: List.generate(5, (_) => Container(
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: AppColors.borderLight)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(flex: 3, child: Container(height: 14, decoration: BoxDecoration(color: AppColors.borderLight, borderRadius: BorderRadius.circular(4)))),
+                    const SizedBox(width: 8),
+                    Expanded(flex: 2, child: Container(height: 14, decoration: BoxDecoration(color: AppColors.borderLight, borderRadius: BorderRadius.circular(4)))),
+                    const SizedBox(width: 8),
+                    Expanded(flex: 2, child: Container(height: 14, decoration: BoxDecoration(color: AppColors.borderLight, borderRadius: BorderRadius.circular(4)))),
+                  ],
+                ),
+              )),
+            ),
+          );
+        }
+
         final benefits = scenesAsync.whenOrNull(
               data: (scenes) => state.buildBenefits(scenes),
             ) ??
@@ -282,8 +313,8 @@ class SubscriptionPage extends ConsumerWidget {
                 decoration: const BoxDecoration(
                   border: Border(bottom: BorderSide(color: AppColors.border)),
                 ),
-                child: Row(
-                  children: const [
+                child: const Row(
+                  children: [
                     Expanded(flex: 3, child: Text('权益', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary))),
                     Expanded(flex: 2, child: Center(child: Text('Free', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textMuted)))),
                     Expanded(flex: 2, child: Center(child: Text('Pro', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)))),
@@ -336,9 +367,9 @@ class SubscriptionPage extends ConsumerWidget {
       child: Row(
         children: [
           Expanded(
-            child: _SubChannelCard(
+            child: PaymentChannelCard(
               label: '支付宝',
-              brandIcon: '支',
+              svgIcon: 'assets/icons/alipay.svg',
               brandColor: const Color(0xFF1677FF),
               isActive: state.channel == PaymentChannel.alipay,
               onTap: () => ref.read(membershipProvider.notifier).selectChannel(PaymentChannel.alipay),
@@ -346,9 +377,9 @@ class SubscriptionPage extends ConsumerWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _SubChannelCard(
+            child: PaymentChannelCard(
               label: '微信支付',
-              brandIcon: '微',
+              svgIcon: 'assets/icons/wechat_pay.svg',
               brandColor: const Color(0xFF07C160),
               isActive: state.channel == PaymentChannel.wechat,
               onTap: () => ref.read(membershipProvider.notifier).selectChannel(PaymentChannel.wechat),
@@ -412,20 +443,26 @@ class SubscriptionPage extends ConsumerWidget {
               Text('购买即表示同意', style: TextStyle(fontSize: 11, color: AppColors.textMuted.withValues(alpha: 0.7))),
               GestureDetector(
                 onTap: () {
-                  final url = AppConstants.termsUrl;
-                  if (url.isNotEmpty) launchUrl(Uri.parse(url));
+                  const url = AppConstants.termsUrl;
+                  if (url.isNotEmpty) {
+                    final uri = Uri.parse(url);
+                    if (uri.scheme == 'https') launchUrl(uri);
+                  }
                 },
-                child: Text('《用户协议》', style: TextStyle(
+                child: const Text('《用户协议》', style: TextStyle(
                   fontSize: 11, color: AppColors.primary, decoration: TextDecoration.underline,
                 )),
               ),
               Text(' 和 ', style: TextStyle(fontSize: 11, color: AppColors.textMuted.withValues(alpha: 0.7))),
               GestureDetector(
                 onTap: () {
-                  final url = AppConstants.privacyUrl;
-                  if (url.isNotEmpty) launchUrl(Uri.parse(url));
+                  const url = AppConstants.privacyUrl;
+                  if (url.isNotEmpty) {
+                    final uri = Uri.parse(url);
+                    if (uri.scheme == 'https') launchUrl(uri);
+                  }
                 },
-                child: Text('《隐私政策》', style: TextStyle(
+                child: const Text('《隐私政策》', style: TextStyle(
                   fontSize: 11, color: AppColors.primary, decoration: TextDecoration.underline,
                 )),
               ),
@@ -476,68 +513,3 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-class _SubChannelCard extends StatelessWidget {
-  final String label;
-  final String brandIcon;
-  final Color brandColor;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _SubChannelCard({
-    required this.label,
-    required this.brandIcon,
-    required this.brandColor,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: isActive ? brandColor.withValues(alpha: 0.08) : AppColors.bg,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: isActive ? brandColor : AppColors.border,
-            width: isActive ? 2.0 : 1.0,
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: brandColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Text(
-                  brandIcon,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? brandColor : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

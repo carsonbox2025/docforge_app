@@ -59,19 +59,9 @@ class TemplateGalleryNotifier extends StateNotifier<TemplateGalleryState> {
     }
   }
 
-  Future<void> refresh() async {
-    state = state.copyWith(isLoading: true, clearError: true);
-    try {
-      final templates = await _dataSource.getTemplates();
-      if (!mounted) return;
-      state = state.copyWith(templates: templates, isLoading: false);
-    } catch (e) {
-      if (!mounted) return;
-      state = state.copyWith(isLoading: false, error: e.toString());
-    }
-  }
+  Future<void> refresh() => loadTemplates();
 
-  Future<void> reload() => refresh();
+  Future<void> reload() => loadTemplates();
 }
 
 final templateDataSourceProvider = Provider<TemplateDataSource>((ref) {

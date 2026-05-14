@@ -35,15 +35,36 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
     final url = notifier.getPreviewUrl();
     if (url != null && url != _previewUrl) {
       _previewUrl = url;
+      setState(() => _isLoading = true);
       _initWebView(url);
     }
   }
 
   Future<void> _initWebView(String url) async {
     final token = await SecureStorage.instance.getToken();
+    _isLoading = true;
+
+    // 将 token 附加到 URL 参数而非 Header，避免重定向时泄漏
+    Uri previewUri = Uri.parse(url);
+    if (token != null) {
+      previewUri = previewUri.replace(queryParameters: {
+        ...previewUri.queryParameters,
+        'token': token,
+      });
+    }
+
+    final allowedHost = previewUri.host;
+
     _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.disabled)
       ..setNavigationDelegate(NavigationDelegate(
+        onNavigationRequest: (request) {
+          final reqHost = Uri.parse(request.url).host;
+          if (reqHost != allowedHost && reqHost.isNotEmpty) {
+            return NavigationDecision.prevent;
+          }
+          return NavigationDecision.navigate;
+        },
         onPageFinished: (_) {
           if (mounted) setState(() => _isLoading = false);
         },
@@ -51,13 +72,14 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
           if (mounted) setState(() => _isLoading = false);
         },
       ))
-      ..loadRequest(
-        Uri.parse(url),
-        headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      );
+      ..loadRequest(previewUri);
     if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _setupPreview();
   }
 
   @override
@@ -85,8 +107,9 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
     });
 
     final title = state.docTitle.isNotEmpty ? state.docTitle : state.selectedType.label;
-    final wordCount = state.resultData?['word_count'] ?? 0;
-    final chapterCount = state.resultData?['chapter_count'] ?? state.outline.length;
+    final hasResult = state.resultData != null;
+    final wordCount = hasResult ? (state.resultData?['word_count'] ?? '--') : '--';
+    final chapterCount = hasResult ? (state.resultData?['chapter_count'] ?? state.outline.length) : state.outline.length;
 
     return Column(
       children: [
@@ -195,7 +218,8 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
 
     final findingsRaw = reviewData['findings'] as List<dynamic>?;
     final findings = findingsRaw
-            ?.map((f) => ReviewFinding.fromJson(f as Map<String, dynamic>))
+            ?.whereType<Map<String, dynamic>>()
+            .map((f) => ReviewFinding.fromJson(f))
             .toList() ??
         [];
 

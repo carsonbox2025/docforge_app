@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../shared/widgets/payment_channel_card.dart';
 import '../../../scene/data/models/scene_models.dart';
-import '../../data/payment_data_source.dart';
 import '../../data/models/payment_models.dart';
 import '../../domain/providers/payment_provider.dart';
 
@@ -93,11 +93,11 @@ class _PayWallState extends ConsumerState<PayWall> {
 
   Widget _buildTitle() {
     if (_step == _PayStep.done) {
-      return Row(
+      return const Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.check_circle, color: AppColors.success, size: 22),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Text('支付成功',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.success)),
         ],
@@ -120,7 +120,7 @@ class _PayWallState extends ConsumerState<PayWall> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.description_outlined, size: 20, color: AppColors.primary),
+          const Icon(Icons.description_outlined, size: 20, color: AppColors.primary),
           const SizedBox(width: 8),
           Text(
             widget.scene.name,
@@ -141,9 +141,9 @@ class _PayWallState extends ConsumerState<PayWall> {
     return Row(
       children: [
         Expanded(
-          child: _ChannelCard(
+          child: PaymentChannelCard(
             label: '支付宝',
-            brandIcon: '支',
+            svgIcon: 'assets/icons/alipay.svg',
             brandColor: const Color(0xFF1677FF),
             isActive: _channel == PaymentChannel.alipay,
             enabled: _step == _PayStep.idle,
@@ -152,9 +152,9 @@ class _PayWallState extends ConsumerState<PayWall> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _ChannelCard(
+          child: PaymentChannelCard(
             label: '微信支付',
-            brandIcon: '微',
+            svgIcon: 'assets/icons/wechat_pay.svg',
             brandColor: const Color(0xFF07C160),
             isActive: _channel == PaymentChannel.wechat,
             enabled: _step == _PayStep.idle,
@@ -204,10 +204,14 @@ class _PayWallState extends ConsumerState<PayWall> {
       _orderNo = order.orderNo;
 
       if (order.payUrl != null && order.payUrl!.isNotEmpty) {
-        final launched = await launchUrl(Uri.parse(order.payUrl!));
+        final uri = Uri.parse(order.payUrl!);
+        if (!uri.scheme.startsWith('https') && !uri.scheme.startsWith('alipays') && !uri.scheme.startsWith('weixin')) {
+          throw ArgumentError('不安全的支付链接');
+        }
+        final launched = await launchUrl(uri);
         if (!launched && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: const Text('无法打开支付页面，请检查网络'), backgroundColor: AppColors.warn),
+            const SnackBar(content: Text('无法打开支付页面，请检查网络'), backgroundColor: AppColors.warn),
           );
         }
       }
@@ -217,7 +221,7 @@ class _PayWallState extends ConsumerState<PayWall> {
       if (mounted) {
         setState(() => _step = _PayStep.idle);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('创建订单失败，请重试'), backgroundColor: AppColors.error),
+          const SnackBar(content: Text('创建订单失败，请重试'), backgroundColor: AppColors.error),
         );
       }
     }
@@ -227,20 +231,20 @@ class _PayWallState extends ConsumerState<PayWall> {
     if (_orderNo == null) return;
     setState(() => _step = _PayStep.confirming);
     try {
-      final paid = await ref.read(paymentProvider.notifier).pollUntilPaid(_orderNo!, maxAttempts: 5);
+      final paid = await ref.read(paymentProvider.notifier).pollUntilPaid(_orderNo!, maxAttempts: 30);
       if (paid) {
         widget.onPaid();
         if (mounted) {
           setState(() => _step = _PayStep.done);
           await Future.delayed(const Duration(milliseconds: 600));
-          Navigator.of(context).pop();
+          if (mounted) Navigator.of(context).pop();
         }
       } else {
         if (mounted) {
           setState(() => _step = _PayStep.waiting);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('暂未检测到支付成功，请稍后再试'),
+            const SnackBar(
+              content: Text('暂未检测到支付成功，请稍后再试'),
               backgroundColor: AppColors.warn,
             ),
           );
@@ -250,7 +254,7 @@ class _PayWallState extends ConsumerState<PayWall> {
       if (mounted) {
         setState(() => _step = _PayStep.waiting);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('查询支付状态失败，请重试'), backgroundColor: AppColors.error),
+          const SnackBar(content: Text('查询支付状态失败，请重试'), backgroundColor: AppColors.error),
         );
       }
     }
@@ -305,74 +309,6 @@ class _PayButton extends StatelessWidget {
           elevation: 0,
         ),
         child: child,
-      ),
-    );
-  }
-}
-
-class _ChannelCard extends StatelessWidget {
-  final String label;
-  final String brandIcon;
-  final Color brandColor;
-  final bool isActive;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _ChannelCard({
-    required this.label,
-    required this.brandIcon,
-    required this.brandColor,
-    required this.isActive,
-    this.enabled = true,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: isActive ? brandColor.withValues(alpha: 0.08) : AppColors.bg,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(
-            color: isActive ? brandColor : AppColors.border,
-            width: isActive ? 2.0 : 1.0,
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: brandColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Text(
-                  brandIcon,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? brandColor : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

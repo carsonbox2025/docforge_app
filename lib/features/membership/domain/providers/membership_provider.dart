@@ -4,7 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../data/models/membership_models.dart';
 import '../../../payment/data/payment_data_source.dart';
 import '../../../payment/data/models/payment_models.dart';
-import '../../../payment/domain/providers/payment_provider.dart';
 import '../../../scene/data/models/scene_models.dart';
 import '../../../scene/domain/providers/scene_provider.dart';
 
@@ -14,7 +13,6 @@ class MembershipState {
   final PaymentChannel channel;
   final bool isLoading;
   final int totalScenes;
-  final int totalTemplates;
 
   const MembershipState({
     this.quota,
@@ -22,7 +20,6 @@ class MembershipState {
     this.channel = PaymentChannel.alipay,
     this.isLoading = false,
     this.totalScenes = 0,
-    this.totalTemplates = 0,
   });
 
   /// 从场景列表动态生成权益项
@@ -55,7 +52,6 @@ class MembershipState {
     PaymentChannel? channel,
     bool? isLoading,
     int? totalScenes,
-    int? totalTemplates,
   }) {
     return MembershipState(
       quota: quota ?? this.quota,
@@ -63,16 +59,16 @@ class MembershipState {
       channel: channel ?? this.channel,
       isLoading: isLoading ?? this.isLoading,
       totalScenes: totalScenes ?? this.totalScenes,
-      totalTemplates: totalTemplates ?? this.totalTemplates,
     );
   }
 }
 
 class MembershipNotifier extends StateNotifier<MembershipState> {
-  final PaymentDataSource _paymentDs = PaymentDataSource();
+  final PaymentDataSource _paymentDs;
   final Ref _ref;
+  bool _cancelled = false;
 
-  MembershipNotifier(this._ref) : super(const MembershipState()) {
+  MembershipNotifier(this._ref, this._paymentDs) : super(const MembershipState()) {
     _loadSceneStats();
   }
 
@@ -82,7 +78,9 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
       final scenes = await _ref.read(sceneListProvider.future);
       if (!mounted) return;
       state = state.copyWith(totalScenes: scenes.length);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Membership] _loadSceneStats error: $e');
+    }
   }
 
   /// 加载真实配额数据
@@ -103,8 +101,15 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
     state = state.copyWith(channel: ch);
   }
 
+  /// 取消订阅轮询
+  void cancelSubscribe() {
+    _cancelled = true;
+    state = state.copyWith(isLoading: false);
+  }
+
   /// 真实订阅流程
   Future<void> subscribe() async {
+    _cancelled = false;
     state = state.copyWith(isLoading: true);
     try {
       final order = await _paymentDs.createOrder(CreateOrderRequest(
@@ -112,14 +117,18 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
         orderType: 'membership',
       ));
 
-      // 打开支付链接
+      // 打开支付链接（安全校验）
       if (order.payUrl != null && order.payUrl!.isNotEmpty) {
-        await launchUrl(Uri.parse(order.payUrl!));
+        final uri = Uri.parse(order.payUrl!);
+        if (uri.scheme.startsWith('https') || uri.scheme.startsWith('alipays') || uri.scheme.startsWith('weixin')) {
+          await launchUrl(uri);
+        }
       }
 
       // 轮询至支付完成
       for (var i = 0; i < 30; i++) {
         await Future.delayed(const Duration(seconds: 3));
+        if (!mounted || _cancelled) return;
         try {
           final updated = await _paymentDs.getOrder(order.orderNo);
           if (updated.isPaid) {
@@ -127,19 +136,23 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
             return;
           }
           if (!updated.isPending) return;
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Membership] poll order error: $e');
+          if (i >= 2) break;
+        }
       }
     } catch (e) {
       debugPrint('[Membership] subscribe error: $e');
     } finally {
-      state = state.copyWith(isLoading: false);
+      if (mounted) state = state.copyWith(isLoading: false);
     }
   }
 }
 
 final membershipProvider =
     StateNotifierProvider<MembershipNotifier, MembershipState>((ref) {
-  final notifier = MembershipNotifier(ref);
+  final paymentDs = PaymentDataSource();
+  final notifier = MembershipNotifier(ref, paymentDs);
   notifier.loadQuota();
   return notifier;
 });

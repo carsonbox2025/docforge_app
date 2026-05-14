@@ -35,6 +35,7 @@ class TemplateDataSource {
       documentCount: json['document_count'] as int? ?? 0,
       description: json['description'] as String? ?? '',
       colorScheme: TemplateColorScheme.schemes[index],
+      requirePro: json['require_pro'] as bool? ?? false,
     );
   }
 }

@@ -11,7 +11,7 @@ class GlossaryDataSource {
       final response = await ApiClient.instance.get(
         '${AppConstants.apiBaseUrl}/glossary',
         queryParameters: {
-          if (languagePair != null) 'language_pair': languagePair,
+          'language_pair': ?languagePair,
         },
       );
       final data = response.data['data'] as List<dynamic>?;

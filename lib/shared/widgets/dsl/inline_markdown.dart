@@ -29,7 +29,7 @@ InlineSpan parseInlineMarkdown(String text, {TextStyle? baseStyle}) {
         flushBuffer();
         spans.add(TextSpan(
           text: text.substring(i + 2, end),
-          style: baseStyle?.copyWith(fontWeight: FontWeight.w700),
+          style: baseStyle.copyWith(fontWeight: FontWeight.w700),
         ));
         i = end + 2;
         continue;
@@ -44,7 +44,7 @@ InlineSpan parseInlineMarkdown(String text, {TextStyle? baseStyle}) {
         flushBuffer();
         spans.add(TextSpan(
           text: text.substring(i + 1, end),
-          style: baseStyle?.copyWith(fontStyle: FontStyle.italic),
+          style: baseStyle.copyWith(fontStyle: FontStyle.italic),
         ));
         i = end + 1;
         continue;
@@ -58,7 +58,7 @@ InlineSpan parseInlineMarkdown(String text, {TextStyle? baseStyle}) {
         flushBuffer();
         spans.add(TextSpan(
           text: text.substring(i + 1, end),
-          style: baseStyle?.copyWith(
+          style: baseStyle.copyWith(
             fontFamily: 'monospace',
             backgroundColor: const Color(0xFFF0F0F0),
             color: const Color(0xFFD63384),
@@ -77,10 +77,10 @@ InlineSpan parseInlineMarkdown(String text, {TextStyle? baseStyle}) {
         if (urlEnd != -1) {
           flushBuffer();
           final linkText = text.substring(i + 1, textEnd);
-          final url = text.substring(textEnd + 2, urlEnd);
+          final _ = text.substring(textEnd + 2, urlEnd);
           spans.add(TextSpan(
             text: linkText,
-            style: baseStyle?.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
+            style: baseStyle.copyWith(color: AppColors.primary, decoration: TextDecoration.underline),
             recognizer: null, // TODO: add tap recognizer if needed
           ));
           i = urlEnd + 1;

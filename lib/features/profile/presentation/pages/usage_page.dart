@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../shared/widgets/common_widgets.dart';
 import '../../data/quota_data_source.dart';
 import '../../domain/providers/quota_provider.dart';
 
@@ -67,11 +66,11 @@ class UsagePage extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 48, color: AppColors.error),
+            const Icon(Icons.error_outline, size: 48, color: AppColors.error),
             const SizedBox(height: 12),
-            Text(
+            const Text(
               '加载用量数据失败',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: AppColors.text,
@@ -336,7 +335,7 @@ class UsagePage extends ConsumerWidget {
           _UsageRow(
             icon: Icons.translate,
             iconColor: AppColors.purple,
-            iconBg: Color(0x0F7C3AED),
+            iconBg: const Color(0x0F7C3AED),
             title: '翻译',
             used: data.translate.used,
             limit: data.translate.limit,

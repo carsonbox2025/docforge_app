@@ -470,7 +470,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 ),
               ),
             const SizedBox(width: 8),
-            Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
+            const Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
           ],
         ),
       ),

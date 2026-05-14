@@ -101,11 +101,11 @@ class TaskDataSource {
         'doc_type': docType,
         'source_type': taskType.name,
         'user_input': userInput,
-        if (templateId != null) 'template_id': templateId,
-        if (title != null) 'title': title,
-        if (polishLevel != null) 'polish_level': polishLevel,
-        if (sourceLang != null) 'source_lang': sourceLang,
-        if (targetLang != null) 'target_lang': targetLang,
+        'template_id': ?templateId,
+        'title': ?title,
+        'polish_level': ?polishLevel,
+        'source_lang': ?sourceLang,
+        'target_lang': ?targetLang,
       },
     );
     final data = response.data!;

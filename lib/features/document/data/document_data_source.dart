@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../../../../core/network/api_client.dart';
-import '../../../../core/constants/app_constants.dart';
 import 'models/document_models.dart';
 
 class DocumentDataSource {
@@ -23,11 +22,11 @@ class DocumentDataSource {
         'doc_type': docType,
         'source_type': sourceType,
         'user_input': userInput,
-        if (templateId != null) 'template_id': templateId,
-        if (title != null) 'title': title,
-        if (polishLevel != null) 'polish_level': polishLevel,
-        if (sourceLang != null) 'source_lang': sourceLang,
-        if (targetLang != null) 'target_lang': targetLang,
+        'template_id': ?templateId,
+        'title': ?title,
+        'polish_level': ?polishLevel,
+        'source_lang': ?sourceLang,
+        'target_lang': ?targetLang,
       },
     );
     final data = response.data!;

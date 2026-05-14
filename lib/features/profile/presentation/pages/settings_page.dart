@@ -139,7 +139,7 @@ class _SettingsPageState extends State<SettingsPage> {
         child: Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: AppColors.primary,
+          activeThumbColor: AppColors.primary,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ),

@@ -5,6 +5,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/shimmer_skeleton.dart';
+import '../../../membership/domain/providers/membership_provider.dart';
 import '../../data/models/template_models.dart';
 import '../../domain/providers/template_provider.dart';
 
@@ -35,10 +36,62 @@ class TemplateGalleryPage extends ConsumerWidget {
                         : RefreshIndicator(
                             color: AppColors.primary,
                             onRefresh: () => ref.read(templateProvider.notifier).reload(),
-                            child: _buildTemplateGrid(state),
+                            child: _buildTemplateGrid(ref, state),
                           ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showProGate(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+                ),
+                const Icon(Icons.workspace_premium, size: 40, color: AppColors.cta),
+                const SizedBox(height: 12),
+                const Text('Pro 专属模板', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
+                const SizedBox(height: 8),
+                const Text('订阅 Pro 会员即可解锁全部专业模板', style: TextStyle(fontSize: 14, color: AppColors.textMuted)),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity, height: 48,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Future.microtask(() {
+                        if (context.mounted) context.push('/subscription');
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                      elevation: 0,
+                    ),
+                    child: const Text('了解 Pro 会员', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -93,8 +146,11 @@ class TemplateGalleryPage extends ConsumerWidget {
             final isActive = state.activeCategory == cat;
             return Padding(
               padding: const EdgeInsets.only(right: 6),
-              child: GestureDetector(
+              child: InkWell(
                 onTap: () => ref.read(templateProvider.notifier).setCategory(cat),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                splashColor: AppColors.primary.withValues(alpha: 0.1),
+                highlightColor: AppColors.primary.withValues(alpha: 0.05),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -126,7 +182,7 @@ class TemplateGalleryPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildTemplateGrid(TemplateGalleryState state) {
+  Widget _buildTemplateGrid(WidgetRef ref, TemplateGalleryState state) {
     final templates = state.filteredTemplates;
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 20),
@@ -138,9 +194,21 @@ class TemplateGalleryPage extends ConsumerWidget {
       ),
       itemCount: templates.length,
       itemBuilder: (context, index) {
+        final tpl = templates[index];
         return _TemplateCard(
-          template: templates[index],
-          onTap: () => context.push('/templates/${templates[index].id}'),
+          template: tpl,
+          onTap: () {
+            if (tpl.requirePro) {
+              final isPro = ref.read(membershipProvider).quota?.isPro ?? false;
+              if (isPro) {
+                context.push('/templates/${tpl.id}');
+              } else {
+                _showProGate(context);
+              }
+            } else {
+              context.push('/templates/${tpl.id}');
+            }
+          },
         );
       },
     );
@@ -156,7 +224,7 @@ class TemplateGalleryPage extends ConsumerWidget {
         mainAxisSpacing: 10,
       ),
       itemCount: 6,
-      itemBuilder: (_, __) => const GridCardShimmer(),
+      itemBuilder: (_, _) => const GridCardShimmer(),
     );
   }
 

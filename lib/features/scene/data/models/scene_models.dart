@@ -1,4 +1,4 @@
-/// 场景模块数据模型 — 对接后端 SceneConfig
+// 场景模块数据模型 — 对接后端 SceneConfig
 
 /// 表单字段定义（后端 SceneConfig.form_fields 驱动）
 class FormFieldDef {

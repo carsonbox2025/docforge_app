@@ -28,7 +28,7 @@ class CoverFieldsForm extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Row(
             children: [
-              Icon(Icons.article_outlined, size: 16, color: AppColors.primary),
+              const Icon(Icons.article_outlined, size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
               const Text(
                 '封面信息',

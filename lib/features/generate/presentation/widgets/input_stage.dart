@@ -97,7 +97,7 @@ class _InputStageState extends ConsumerState<InputStage> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: scenes.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (_, index) {
           final scene = scenes[index];
           final isActive = selected?.sceneId == scene.sceneId;
@@ -169,7 +169,7 @@ class _InputStageState extends ConsumerState<InputStage> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: DocType.values.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (_, index) {
           final type = DocType.values[index];
           final isActive = state.selectedType == type;
@@ -428,12 +428,12 @@ class _InputStageState extends ConsumerState<InputStage> {
                     borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.edit_note, size: 16, color: AppColors.textSecondary),
-                    const SizedBox(width: 4),
-                    const Text(
+                    Icon(Icons.edit_note, size: 16, color: AppColors.textSecondary),
+                    SizedBox(width: 4),
+                    Text(
                       '撰写大纲',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                     ),
@@ -530,12 +530,12 @@ class _InputStageState extends ConsumerState<InputStage> {
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline, size: 16, color: AppColors.error),
+          const Icon(Icons.error_outline, size: 16, color: AppColors.error),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               state.error!,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.error),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.error),
             ),
           ),
         ],
@@ -564,7 +564,7 @@ class _InputStageState extends ConsumerState<InputStage> {
                 Navigator.pop(ctx);
                 _doSwitchScene(scene, notifier);
               },
-              child: Text('确定切换', style: TextStyle(color: AppColors.error)),
+              child: const Text('确定切换', style: TextStyle(color: AppColors.error)),
             ),
           ],
         ),

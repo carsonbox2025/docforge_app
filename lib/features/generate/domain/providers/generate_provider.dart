@@ -86,6 +86,12 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       clearError: true,
     );
 
+    // 清空上一次生成结果
+    state = state.copyWith(
+      documentId: null,
+      resultData: null,
+    );
+
     final request = GenerateRequest(
       templateId: scene?.templateId ?? state.selectedType.defaultTemplateId,
       content: content,
@@ -177,7 +183,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     }
 
     // 更新 active section
-    final activeSection = dslUpdate['active_section'] as String?;
+    final _ = dslUpdate['active_section'] as String?;
 
     // 更新 DSL nodes
     final nodeUpdates = dslUpdate['node_updates'] as List<dynamic>?;
@@ -316,7 +322,9 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           }
           return;
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[Generate] poll error: $e');
+      }
     }
     state = state.copyWith(
       stage: GenerateStage.input,
@@ -341,16 +349,25 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
   }
 
   /// 取消当前生成任务
-  void cancelGenerate() {
+  Future<void> cancelGenerate() async {
     _progressSub?.cancel();
-    if (_currentTaskId != null) {
-      _dataSource.cancelTask(_currentTaskId!);
-    }
+    _progressSub = null;
+    final taskId = _currentTaskId;
+    _currentTaskId = null;
+
     state = state.copyWith(
       stage: GenerateStage.input,
       status: GenerationStatus.idle,
       clearError: true,
     );
+
+    if (taskId != null) {
+      try {
+        await _dataSource.cancelTask(taskId);
+      } catch (e) {
+        debugPrint('[Generate] cancelTask failed for $taskId: $e');
+      }
+    }
   }
 
   /// 组装提交内容：有场景时合并表单字段，否则用原始 content
@@ -387,10 +404,12 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       );
     } catch (e) {
       debugPrint('[Generate] Export error: $e');
-      if (mounted) state = state.copyWith(
-        isExporting: false,
-        error: '导出失败，请检查网络后重试',
-      );
+      if (mounted) {
+        state = state.copyWith(
+          isExporting: false,
+          error: '导出失败，请检查网络后重试',
+        );
+      }
       return;
     }
     if (mounted) state = state.copyWith(isExporting: false);
@@ -492,8 +511,8 @@ class GenerateState {
     List<DslOutline>? outline,
     Map<String, List<DslNode>>? dslNodes,
     Map<String, dynamic>? streamingBlocks,
-    int? documentId,
-    Map<String, dynamic>? resultData,
+    Object? documentId = _sentinel,
+    Object? resultData = _sentinel,
     String? error,
     bool? isExporting,
     bool clearError = false,
@@ -515,8 +534,8 @@ class GenerateState {
         outline: outline ?? this.outline,
         dslNodes: dslNodes ?? this.dslNodes,
         streamingBlocks: streamingBlocks ?? this.streamingBlocks,
-        documentId: documentId ?? this.documentId,
-        resultData: resultData ?? this.resultData,
+        documentId: documentId == _sentinel ? this.documentId : documentId as int?,
+        resultData: resultData == _sentinel ? this.resultData : resultData as Map<String, dynamic>?,
         error: clearError ? null : (error ?? this.error),
         isExporting: isExporting ?? this.isExporting,
       );

@@ -31,6 +31,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   shimmer: ^3.0.0
   flutter_markdown: ^0.7.4+2
+  flutter_svg: ^2.0.17
 
   # File picking
   file_picker: ^8.1.7
@@ -67,3 +68,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icons/

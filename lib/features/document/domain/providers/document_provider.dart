@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/document_data_source.dart';
 import '../../data/models/document_models.dart';
@@ -16,6 +17,8 @@ class DocumentListState {
   final DocCenterTab tab;
   final int currentPage;
   final bool hasMore;
+  final int? runningTotal;
+  final int? pendingTotal;
 
   const DocumentListState({
     this.items = const [],
@@ -25,7 +28,16 @@ class DocumentListState {
     this.tab = DocCenterTab.all,
     this.currentPage = 1,
     this.hasMore = true,
+    this.runningTotal,
+    this.pendingTotal,
   });
+
+  int get effectiveTotal {
+    if (tab == DocCenterTab.running) {
+      return (runningTotal ?? 0) + (pendingTotal ?? 0);
+    }
+    return total;
+  }
 
   DocumentListState copyWith({
     List<DocForgeDocument>? items,
@@ -35,62 +47,77 @@ class DocumentListState {
     DocCenterTab? tab,
     int? currentPage,
     bool? hasMore,
+    int? runningTotal,
+    int? pendingTotal,
+    bool clearError = false,
   }) =>
       DocumentListState(
         items: items ?? this.items,
         total: total ?? this.total,
         isLoading: isLoading ?? this.isLoading,
-        error: error,
+        error: clearError ? null : (error ?? this.error),
         tab: tab ?? this.tab,
         currentPage: currentPage ?? this.currentPage,
         hasMore: hasMore ?? this.hasMore,
+        runningTotal: runningTotal ?? this.runningTotal,
+        pendingTotal: pendingTotal ?? this.pendingTotal,
       );
 }
 
 class DocumentListNotifier extends StateNotifier<DocumentListState> {
   DocumentListNotifier() : super(const DocumentListState());
 
-  Future<void> load({DocCenterTab? tab, int page = 1}) async {
-    state = state.copyWith(isLoading: true, error: null, tab: tab ?? state.tab);
-    try {
-      DocStatus? status;
-      if (state.tab == DocCenterTab.running) {
-        // pending + running 都算进行中，后端暂只支持单一 status 筛选
-        // 传 null 由前端过滤，或先查 pending 再查 running
-        status = DocStatus.running;
-      } else if (state.tab == DocCenterTab.completed) {
-        status = DocStatus.completed;
-      }
+  DocStatus? _statusForTab() {
+    if (state.tab == DocCenterTab.running) return DocStatus.running;
+    if (state.tab == DocCenterTab.completed) return DocStatus.completed;
+    return null;
+  }
 
+  /// 加载 pending 文档并合并排序（running Tab 专用）
+  Future<({List<DocForgeDocument> docs, int? pendingTotal})> _loadPendingDocs(int page) async {
+    try {
+      final pendingResult = await _ds.listDocuments(status: DocStatus.pending, page: page);
+      final pendingRaw = pendingResult['items'] as List<dynamic>? ?? [];
+      final pendingDocs = pendingRaw
+          .map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>))
+          .toList();
+      return (
+        docs: pendingDocs,
+        pendingTotal: pendingResult['total'] as int?,
+      );
+    } catch (e) {
+      debugPrint('[DocumentList] load pending error: $e');
+      return (docs: <DocForgeDocument>[], pendingTotal: null as int?);
+    }
+  }
+
+  Future<void> load({DocCenterTab? tab, int page = 1}) async {
+    state = state.copyWith(isLoading: true, clearError: true, tab: tab ?? state.tab);
+    try {
+      final status = _statusForTab();
       final result = await _ds.listDocuments(status: status, page: page);
       final rawItems = result['items'] as List<dynamic>? ?? [];
       final docs = rawItems
           .map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>))
           .toList();
 
-      // 如果 Tab 是进行中，额外加载 pending
+      int? pendingTotal;
       if (state.tab == DocCenterTab.running) {
-        try {
-          final pendingResult = await _ds.listDocuments(status: DocStatus.pending, page: page);
-          final pendingRaw = pendingResult['items'] as List<dynamic>? ?? [];
-          final pendingDocs = pendingRaw
-              .map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>))
-              .toList();
-          docs.addAll(pendingDocs);
-          docs.sort((a, b) {
-            final ta = a.createdAt ?? '';
-            final tb = b.createdAt ?? '';
-            return tb.compareTo(ta);
-          });
-        } catch (_) {}
+        final pending = await _loadPendingDocs(page);
+        pendingTotal = pending.pendingTotal;
+        docs.addAll(pending.docs);
+        docs.sort((a, b) => (b.createdAt ?? '').compareTo(a.createdAt ?? ''));
       }
 
+      final totalCount = result['total'] as int? ?? 0;
       state = state.copyWith(
         items: docs,
-        total: result['total'] as int? ?? 0,
+        total: totalCount,
         isLoading: false,
         currentPage: page,
-        hasMore: docs.length < (result['total'] as int? ?? 0),
+        runningTotal: state.tab == DocCenterTab.running ? totalCount : null,
+        pendingTotal: pendingTotal,
+        hasMore: docs.length < (state.tab == DocCenterTab.running ? totalCount + (pendingTotal ?? 0) : totalCount),
       );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -99,40 +126,42 @@ class DocumentListNotifier extends StateNotifier<DocumentListState> {
 
   Future<void> loadMore() async {
     if (!state.hasMore || state.isLoading) return;
+    state = state.copyWith(isLoading: true);
     final nextPage = state.currentPage + 1;
     try {
-      DocStatus? status;
-      if (state.tab == DocCenterTab.running) {
-        status = DocStatus.running;
-      } else if (state.tab == DocCenterTab.completed) {
-        status = DocStatus.completed;
-      }
-
+      final status = _statusForTab();
       final result = await _ds.listDocuments(status: status, page: nextPage);
       final rawItems = result['items'] as List<dynamic>? ?? [];
       final newDocs = rawItems
           .map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>))
           .toList();
 
+      int? pendingTotal;
       if (state.tab == DocCenterTab.running) {
-        try {
-          final pendingResult = await _ds.listDocuments(status: DocStatus.pending, page: nextPage);
-          final pendingRaw = pendingResult['items'] as List<dynamic>? ?? [];
-          newDocs.addAll(
-            pendingRaw.map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>)).toList(),
-          );
-          newDocs.sort((a, b) => (b.createdAt ?? '').compareTo(a.createdAt ?? ''));
-        } catch (_) {}
+        final pending = await _loadPendingDocs(nextPage);
+        pendingTotal = pending.pendingTotal;
+        newDocs.addAll(pending.docs);
+        newDocs.sort((a, b) => (b.createdAt ?? '').compareTo(a.createdAt ?? ''));
       }
 
-      final total = result['total'] as int? ?? 0;
+      final runningTotal = result['total'] as int? ?? 0;
+      final totalCount = state.tab == DocCenterTab.running
+          ? runningTotal + (pendingTotal ?? state.pendingTotal ?? 0)
+          : runningTotal;
+      final allItems = [...state.items, ...newDocs];
       state = state.copyWith(
-        items: [...state.items, ...newDocs],
-        total: total,
+        items: allItems,
+        total: runningTotal,
+        isLoading: false,
         currentPage: nextPage,
-        hasMore: state.items.length + newDocs.length < total,
+        runningTotal: state.tab == DocCenterTab.running ? runningTotal : null,
+        pendingTotal: pendingTotal ?? state.pendingTotal,
+        hasMore: allItems.length < totalCount,
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[DocumentList] loadMore error: $e');
+      state = state.copyWith(isLoading: false, error: '加载更多失败，请重试');
+    }
   }
 }
 
@@ -182,6 +211,16 @@ class DocumentDetailNotifier extends StateNotifier<DocumentDetailState> {
     }
   }
 
+  /// 静默刷新 — 不设置 isLoading，避免 UI 闪屏
+  Future<void> _silentRefresh(int docId) async {
+    try {
+      final doc = await _ds.getDocument(docId);
+      if (mounted) state = DocumentDetailState(document: doc);
+    } catch (e) {
+      debugPrint('[DocumentDetail] silentRefresh error: $e');
+    }
+  }
+
   void _connectStream(int docId) {
     _cancelToken?.cancel();
     _streamSub?.cancel();
@@ -200,23 +239,23 @@ class DocumentDetailNotifier extends StateNotifier<DocumentDetailState> {
       },
       onDone: () async {
         final doc = state.document;
-        // SSE 正常结束且进度满 → 文档已完成，刷新一次获取最终状态
+        // SSE 正常结束且进度满 → 文档已完成，静默刷新获取最终状态
         if (doc != null && doc.progress >= 1.0) {
           await Future.delayed(const Duration(milliseconds: 500));
-          load(docId);
+          if (mounted) await _silentRefresh(docId);
           return;
         }
         _sseRetryCount++;
         if (_sseRetryCount <= _maxSseRetry) {
           await Future.delayed(const Duration(seconds: 1));
-          load(docId);
+          if (mounted) load(docId);
         }
       },
       onError: (e) async {
         _sseRetryCount++;
         if (_sseRetryCount <= _maxSseRetry) {
           await Future.delayed(const Duration(seconds: 2));
-          load(docId);
+          if (mounted) load(docId);
         }
       },
     );

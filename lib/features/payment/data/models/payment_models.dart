@@ -1,4 +1,4 @@
-/// 支付模块数据模型 — 对接后端 OrderService
+// 支付模块数据模型 — 对接后端 OrderService
 
 enum PaymentChannel { alipay, wechat }
 

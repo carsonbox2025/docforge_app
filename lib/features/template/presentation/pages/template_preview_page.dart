@@ -142,7 +142,7 @@ class _TemplatePreviewPageState extends State<TemplatePreviewPage> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Icon(Icons.description_outlined, size: 12, color: AppColors.textMuted),
+                        const Icon(Icons.description_outlined, size: 12, color: AppColors.textMuted),
                         const SizedBox(width: 3),
                         Text(
                           '${t.documentCount} 个文档',

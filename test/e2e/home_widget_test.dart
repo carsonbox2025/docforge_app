@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:docforge_app/features/home/presentation/pages/home_page.dart';
 import 'package:docforge_app/features/home/presentation/widgets/quick_actions.dart';
-import 'package:docforge_app/features/home/presentation/widgets/feature_carousel.dart';
 import 'package:docforge_app/features/home/presentation/widgets/recent_documents.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';

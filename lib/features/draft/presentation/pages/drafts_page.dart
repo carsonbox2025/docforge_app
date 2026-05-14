@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../data/models/draft_model.dart';
@@ -66,7 +65,7 @@ class _DraftsPageState extends ConsumerState<DraftsPage> {
               : ListView.separated(
                   padding: const EdgeInsets.all(20),
                   itemCount: draftState.drafts.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, index) =>
                       _buildDraftCard(draftState.drafts[index]),
                 ),
@@ -162,7 +161,7 @@ class _DraftsPageState extends ConsumerState<DraftsPage> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.access_time,
+                    const Icon(Icons.access_time,
                         size: 13, color: AppColors.textMuted),
                     const SizedBox(width: 4),
                     Text(
