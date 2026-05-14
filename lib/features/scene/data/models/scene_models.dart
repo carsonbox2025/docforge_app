@@ -50,11 +50,13 @@ class PricingInfo {
 class FieldRegion {
   final String regionId;
   final String bookmark;
+  final String label;
   final bool required;
 
   const FieldRegion({
     required this.regionId,
     required this.bookmark,
+    this.label = '',
     this.required = true,
   });
 
@@ -62,6 +64,7 @@ class FieldRegion {
       FieldRegion(
         regionId: id,
         bookmark: json['bookmark'] as String? ?? '',
+        label: json['label'] as String? ?? '',
         required: json['required'] as bool? ?? true,
       );
 

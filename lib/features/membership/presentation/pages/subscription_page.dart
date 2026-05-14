@@ -12,11 +12,24 @@ import '../../../scene/domain/providers/scene_provider.dart';
 import '../../data/models/membership_models.dart';
 import '../../domain/providers/membership_provider.dart';
 
-class SubscriptionPage extends ConsumerWidget {
+class SubscriptionPage extends ConsumerStatefulWidget {
   const SubscriptionPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SubscriptionPage> createState() => _SubscriptionPageState();
+}
+
+class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(membershipProvider.notifier).ensureInitialized();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(membershipProvider);
 
     return Scaffold(

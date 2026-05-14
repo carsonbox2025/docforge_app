@@ -67,9 +67,18 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
   final PaymentDataSource _paymentDs;
   final Ref _ref;
   bool _cancelled = false;
+  bool _initialized = false;
 
-  MembershipNotifier(this._ref, this._paymentDs) : super(const MembershipState()) {
-    _loadSceneStats();
+  MembershipNotifier(this._ref, this._paymentDs) : super(const MembershipState());
+
+  /// 首次访问时延迟初始化（不阻塞构造函数）
+  Future<void> ensureInitialized() async {
+    if (_initialized) return;
+    _initialized = true;
+    await Future.wait([
+      _loadSceneStats(),
+      loadQuota(),
+    ]);
   }
 
   /// 从场景列表聚合统计数据
@@ -152,7 +161,5 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
 final membershipProvider =
     StateNotifierProvider<MembershipNotifier, MembershipState>((ref) {
   final paymentDs = PaymentDataSource();
-  final notifier = MembershipNotifier(ref, paymentDs);
-  notifier.loadQuota();
-  return notifier;
+  return MembershipNotifier(ref, paymentDs);
 });

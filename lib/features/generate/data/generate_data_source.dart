@@ -1,20 +1,29 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'models/generate_models.dart';
 import 'task_data_source.dart';
+
+void _log(String message) {
+  if (kDebugMode) debugPrint(message);
+}
 
 class GenerateDataSource {
   final TaskDataSource _taskDs = TaskDataSource();
 
   /// 发起文档生成（异步任务模式）
   Future<int> submitGenerateTask(GenerateRequest request) async {
+    _log('[GenerateDataSource] submitGenerateTask: '
+        'docType=${request.docType}, sceneId=${request.sceneId}, '
+        'layer=${request.layer}, templateId=${request.templateId}');
+
     return _taskDs.submitTask(
       taskType: TaskType.generate,
       userInput: {
         'content': request.content,
         'language': request.language.code,
         'mode': request.mode,
-        if (request.sceneId != null) 'scene_id': request.sceneId,
-        if (request.layer != null) 'layer': request.layer,
+        'scene_id': request.sceneId,
+        'layer': request.layer,
         if (request.fieldsData != null) 'fields_data': request.fieldsData,
       },
       templateId: request.templateId,

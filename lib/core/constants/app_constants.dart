@@ -15,7 +15,7 @@ class AppConstants {
   static String get apiOrigin {
     if (_envHost.isNotEmpty) return _envHost;
     if (kIsWeb) return 'http://localhost:8000';
-    if (!kReleaseMode && Platform.isAndroid) return 'http://10.0.2.2';
+    if (!kReleaseMode && Platform.isAndroid) return 'http://10.0.2.2:8000';
     if (kReleaseMode) return 'http://61.132.52.22:8084';
     return 'http://localhost:8000';
   }

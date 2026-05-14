@@ -73,19 +73,23 @@ class DocumentDataSource {
     return DocForgeDocument.fromJson(data['data'] as Map<String, dynamic>);
   }
 
-  /// SSE 实时进度流（独立 Dio 实例，避免占用连接池）
+  /// SSE 实时进度流（独立 Dio 实例，避免占用连接池，复制认证头）
   Stream<DocProgress> progressStream(int docId, {CancelToken? cancelToken}) async* {
+    final mainDio = ApiClient.instance.dio;
     final dio = Dio(BaseOptions(
-      baseUrl: ApiClient.instance.dio.options.baseUrl,
+      baseUrl: mainDio.options.baseUrl,
       connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 60),
+      receiveTimeout: const Duration(minutes: 30),
+      headers: {
+        ...mainDio.options.headers,
+      },
     ));
     try {
       final response = await dio.get<ResponseBody>(
         '/document/$docId/stream',
         options: Options(
           responseType: ResponseType.stream,
-          receiveTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(minutes: 30),
           sendTimeout: const Duration(seconds: 10),
         ),
         cancelToken: cancelToken,

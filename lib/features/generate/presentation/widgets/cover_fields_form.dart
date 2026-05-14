@@ -54,7 +54,7 @@ class CoverFieldsForm extends StatelessWidget {
               return SizedBox(
                 width: width,
                 child: _CoverField(
-                  label: _fieldLabel(region.regionId),
+                  label: region.label.isNotEmpty ? region.label : _fieldLabel(region.regionId),
                   required: region.required,
                   value: fieldValues[region.regionId] ?? '',
                   onChanged: (v) => onChanged(region.regionId, v),

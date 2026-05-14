@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -22,15 +23,8 @@ class InputStage extends ConsumerStatefulWidget {
 }
 
 class _InputStageState extends ConsumerState<InputStage> {
-  final _contentController = TextEditingController();
   final Map<String, String> _fieldValues = {};
   final Map<String, String> _coverValues = {};
-
-  @override
-  void dispose() {
-    _contentController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +41,7 @@ class _InputStageState extends ConsumerState<InputStage> {
           showBackButton: true,
           onBack: () => context.go('/'),
         ),
-        // 场景列表
+        // 场景列表（分组）
         scenesAsync.when(
           loading: () => const Padding(
             padding: EdgeInsets.symmetric(vertical: 20),
@@ -57,8 +51,8 @@ class _InputStageState extends ConsumerState<InputStage> {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           ),
-          error: (e, _) => _buildFallbackChips(state, notifier),
-          data: (scenes) => _buildSceneChips(scenes, state, notifier),
+          error: (e, _) => _buildSceneLoadError(e),
+          data: (scenes) => _buildGroupedSceneChips(scenes, state, notifier),
         ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
@@ -70,10 +64,9 @@ class _InputStageState extends ConsumerState<InputStage> {
             child: Column(
               children: [
                 _buildFormArea(state, notifier),
-                _buildModeSelector(state, notifier),
                 _buildLanguagePills(state, notifier),
                 _buildErrorBanner(state),
-                _buildActionButtons(state, notifier),
+                _buildActionButton(state, notifier),
                 _buildFooterHint(state),
                 const SizedBox(height: 16),
               ],
@@ -84,254 +77,235 @@ class _InputStageState extends ConsumerState<InputStage> {
     );
   }
 
-  /// 场景横滑 Chips
-  Widget _buildSceneChips(
+  // ─── 场景 Chips（分组：Layer 1 / Layer 2） ───
+
+  Widget _buildGroupedSceneChips(
+    List<SceneConfig> scenes,
+    GenerateState state,
+    GenerateNotifier notifier,
+  ) {
+    final layer1 = scenes.where((s) => s.layer == 1).toList();
+    final layer2 = scenes.where((s) => s.layer == 2).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildChipGroup('标准文档', layer1, state, notifier),
+        if (layer2.isNotEmpty) _buildChipGroup('长文档写作', layer2, state, notifier),
+      ],
+    );
+  }
+
+  Widget _buildChipGroup(
+    String label,
     List<SceneConfig> scenes,
     GenerateState state,
     GenerateNotifier notifier,
   ) {
     final selected = state.selectedScene;
-    return SizedBox(
-      height: 56,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: scenes.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (_, index) {
-          final scene = scenes[index];
-          final isActive = selected?.sceneId == scene.sceneId;
-          return GestureDetector(
-            onTap: () => _confirmAndSwitchScene(scene, notifier),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.primary : AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isActive ? AppColors.primary : AppColors.border,
-                  width: 1.5,
-                ),
-                boxShadow: isActive
-                    ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))]
-                    : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _iconForScene(scene),
-                    size: 15,
-                    color: isActive ? Colors.white : AppColors.textMuted,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    scene.name,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isActive ? Colors.white : AppColors.textSecondary,
-                    ),
-                  ),
-                  if (!scene.pricing.isFree) ...[
-                    const SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: isActive ? Colors.white.withValues(alpha: 0.25) : AppColors.ctaBg,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        scene.pricing.displayPrice,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: isActive ? Colors.white : AppColors.cta,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// 降级方案：场景 API 加载失败时显示硬编码 DocType
-  Widget _buildFallbackChips(GenerateState state, GenerateNotifier notifier) {
-    return SizedBox(
-      height: 56,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: DocType.values.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (_, index) {
-          final type = DocType.values[index];
-          final isActive = state.selectedType == type;
-          return GestureDetector(
-            onTap: () => notifier.selectDocType(type),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.primary : AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isActive ? AppColors.primary : AppColors.border,
-                  width: 1.5,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(type.icon, size: 15, color: isActive ? Colors.white : AppColors.textMuted),
-                  const SizedBox(width: 6),
-                  Text(
-                    type.label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isActive ? Colors.white : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// 表单区域：有场景配置时显示动态表单，否则显示固定 textarea
-  Widget _buildFormArea(GenerateState state, GenerateNotifier notifier) {
-    final scene = state.selectedScene;
-
-    if (scene != null && scene.formFields.isNotEmpty) {
-      return Column(
-        children: [
-          // Layer 2 封面字段
-          if (scene.isLayer2)
-            CoverFieldsForm(
-              fieldRegions: _extractCoverRegions(scene),
-              fieldValues: _coverValues,
-              onChanged: (k, v) {
-                setState(() => _coverValues[k] = v);
-                notifier.updateFieldsData({..._coverValues});
-                notifier.clearError();
-              },
-            ),
-          // 场景动态表单
-          SceneDynamicForm(
-            scene: scene,
-            fieldValues: _fieldValues,
-            onChanged: (k, v) {
-              setState(() => _fieldValues[k] = v);
-              // 将表单值合并到 content
-              notifier.updateContent(_fieldValues['content'] ?? '');
-              notifier.updateFormFields({..._fieldValues});
-              notifier.clearError();
-            },
-          ),
-        ],
-      );
-    }
-
-    // 降级：固定 textarea
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
           child: Text(
-            '描述你的需求',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
+            label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textMuted),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Container(
-            height: 250,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: Border.all(color: AppColors.border, width: 1.5),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: TextField(
-              controller: _contentController,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.6),
-              decoration: InputDecoration(
-                hintText: '请描述你需要生成的文档内容...',
-                hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14, height: 1.6),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                ),
-                contentPadding: const EdgeInsets.all(12),
-              ),
-              onChanged: (v) { notifier.updateContent(v); notifier.clearError(); },
-            ),
+        SizedBox(
+          height: 44,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: scenes.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, index) {
+              final scene = scenes[index];
+              final isActive = selected?.sceneId == scene.sceneId;
+              return _buildSceneChip(scene, isActive, notifier);
+            },
           ),
         ),
       ],
     );
   }
 
-  Widget _buildModeSelector(GenerateState state, GenerateNotifier notifier) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Row(
-        children: [
-          const Text(
-            '生成模式',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+  Widget _buildSceneChip(SceneConfig scene, bool isActive, GenerateNotifier notifier) {
+    return GestureDetector(
+      onTap: () => _confirmAndSwitchScene(scene, notifier),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive ? AppColors.primary : AppColors.border,
+            width: 1.5,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceHover,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  _ModeChip(
-                    label: '快速撰写',
-                    icon: Icons.bolt,
-                    isActive: state.mode == 'quick',
-                    onTap: () => notifier.selectMode('quick'),
-                  ),
-                  _ModeChip(
-                    label: '专业长文',
-                    icon: Icons.auto_awesome,
-                    isActive: state.mode == 'professional',
-                    onTap: () => notifier.selectMode('professional'),
-                  ),
-                ],
+          boxShadow: isActive
+              ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _iconForScene(scene),
+              size: 14,
+              color: isActive ? Colors.white : AppColors.textMuted,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              scene.name,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isActive ? Colors.white : AppColors.textSecondary,
               ),
             ),
-          ),
-        ],
+            // Layer 2 PRO 角标
+            if (scene.isLayer2) ...[
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.white.withValues(alpha: 0.25) : AppColors.purple.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  'PRO',
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    color: isActive ? Colors.white : AppColors.purple,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+            // 收费场景价格标签（Layer 1 和 Layer 2 均显示）
+            if (!scene.pricing.isFree) ...[
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.white.withValues(alpha: 0.25) : AppColors.ctaBg,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  scene.pricing.displayPrice,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: isActive ? Colors.white : AppColors.cta,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
+
+  /// 场景加载失败时显示错误提示
+  Widget _buildSceneLoadError(Object error) {
+    String errorMessage;
+    if (error is DioException) {
+      errorMessage = switch (error.type) {
+        DioExceptionType.connectionTimeout ||
+        DioExceptionType.sendTimeout ||
+        DioExceptionType.receiveTimeout =>
+          '网络连接超时，请检查网络后重试',
+        DioExceptionType.connectionError =>
+          '无法连接到服务器，请检查网络连接',
+        DioExceptionType.badResponse => () {
+            final status = error.response?.statusCode;
+            final body = error.response?.data;
+            if (body is Map && body.containsKey('message')) {
+              return '${body['message']} (HTTP $status)';
+            }
+            return '服务器返回错误 (HTTP $status)';
+          }(),
+        _ => '网络请求失败: ${error.message}',
+      };
+    } else {
+      errorMessage = error.toString();
+    }
+
+    debugPrint('[InputStage] sceneListProvider error: $error');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.errorBg,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, size: 18, color: AppColors.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '场景配置加载失败: $errorMessage',
+                style: const TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── 表单区域 ───
+
+  Widget _buildFormArea(GenerateState state, GenerateNotifier notifier) {
+    final scene = state.selectedScene;
+    if (scene == null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: Text(
+            '请先选择文档场景',
+            style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Layer 2 封面字段
+        if (scene.isLayer2)
+          CoverFieldsForm(
+            fieldRegions: _extractCoverRegions(scene),
+            fieldValues: _coverValues,
+            onChanged: (k, v) {
+              setState(() => _coverValues[k] = v);
+              notifier.updateFieldsData({..._coverValues});
+              notifier.clearError();
+            },
+          ),
+        // 场景动态表单
+        SceneDynamicForm(
+          scene: scene,
+          fieldValues: _fieldValues,
+          onChanged: (k, v) {
+            setState(() => _fieldValues[k] = v);
+            notifier.updateContent(_fieldValues['content'] ?? '');
+            notifier.updateFormFields({..._fieldValues});
+            notifier.clearError();
+          },
+        ),
+      ],
+    );
+  }
+
+  // ─── 语言选择 ───
 
   Widget _buildLanguagePills(GenerateState state, GenerateNotifier notifier) {
     return Padding(
@@ -368,91 +342,62 @@ class _InputStageState extends ConsumerState<InputStage> {
     );
   }
 
-  Widget _buildActionButtons(GenerateState state, GenerateNotifier notifier) {
+  // ─── 操作按钮（单一 CTA） ───
+
+  Widget _buildActionButton(GenerateState state, GenerateNotifier notifier) {
     final scene = state.selectedScene;
-    final priceLabel = scene != null ? scene.pricing.displayPrice : '';
     final canGenerate = _canGenerate(state);
+
+    // 按钮文案：Layer 2 或付费场景显示价格，免费场景不显示
+    String buttonText;
+    if (scene != null && !scene.pricing.isFree) {
+      buttonText = '一键生成 ${scene.pricing.displayPrice}';
+    } else {
+      buttonText = '一键生成';
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: SizedBox(
-              height: 48,
-              child: ElevatedButton(
-                onPressed: canGenerate ? () => _handleGenerate(scene, notifier, outlineOnly: false) : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: canGenerate ? AppColors.primary : AppColors.border,
-                  disabledBackgroundColor: AppColors.border,
-                  disabledForegroundColor: AppColors.textMuted,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                  elevation: 0,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.bolt, size: 20, color: Colors.white),
-                    const SizedBox(width: 6),
-                    Text(
-                      priceLabel.isNotEmpty && priceLabel != '免费'
-                          ? '一键生成 $priceLabel'
-                          : '快速撰写',
-                      style: TextStyle(
-                        fontSize: state.selectedLanguage == DocLanguage.zhCN ? 15 : 14,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
+      child: SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton(
+          onPressed: canGenerate ? () => _handleGenerate(scene, notifier) : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: canGenerate ? AppColors.primary : AppColors.border,
+            disabledBackgroundColor: AppColors.border,
+            disabledForegroundColor: AppColors.textMuted,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            elevation: 0,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.bolt, size: 20, color: Colors.white),
+              const SizedBox(width: 6),
+              Text(
+                buttonText,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
                 ),
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 1,
-            child: SizedBox(
-              height: 48,
-              child: OutlinedButton(
-                onPressed: canGenerate ? () => _handleGenerate(scene, notifier, outlineOnly: true) : null,
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: AppColors.surface,
-                  foregroundColor: AppColors.text,
-                  side: const BorderSide(color: AppColors.border),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.edit_note, size: 16, color: AppColors.textSecondary),
-                    SizedBox(width: 4),
-                    Text(
-                      '撰写大纲',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  /// 生成按钮回调 — 增加支付拦截
+  /// 生成按钮回调 — 支付拦截
   Future<void> _handleGenerate(
     SceneConfig? scene,
-    GenerateNotifier notifier, {
-    required bool outlineOnly,
-  }) async {
+    GenerateNotifier notifier,
+  ) async {
     if (scene != null && !scene.pricing.isFree) {
       try {
         final quota = await ref.read(quotaProvider.future);
@@ -461,7 +406,7 @@ class _InputStageState extends ConsumerState<InputStage> {
             PayWall.show(
               context,
               scene: scene,
-              onPaid: () => notifier.startGenerate(outlineOnly: outlineOnly),
+              onPaid: () => notifier.startGenerate(),
             );
           }
           return;
@@ -470,14 +415,20 @@ class _InputStageState extends ConsumerState<InputStage> {
         // 配额查询失败，允许继续（后端会做最终检查）
       }
     }
-    notifier.startGenerate(outlineOnly: outlineOnly);
+    notifier.startGenerate();
   }
+
+  // ─── 底部提示 ───
 
   Widget _buildFooterHint(GenerateState state) {
     final scene = state.selectedScene;
-    final hint = scene != null && !scene.pricing.isFree
-        ? '${scene.name} · ${scene.pricing.displayPrice}/篇，生成不满意全额退款'
-        : '快速生成将使用模板默认结构，跳过大纲确认步骤';
+    if (scene == null) return const SizedBox.shrink();
+
+    final hint = scene.isLayer2
+        ? '${scene.name}由 AI 分章节编排生成，完整覆盖封面、正文、参考文献'
+        : scene.pricing.isFree
+            ? '快速生成将使用模板默认结构'
+            : '${scene.name} · ${scene.pricing.displayPrice}/篇，生成不满意全额退款';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -489,13 +440,11 @@ class _InputStageState extends ConsumerState<InputStage> {
     );
   }
 
-  /// 前端校验必填字段
+  // ─── 前端校验 ───
+
   bool _canGenerate(GenerateState state) {
     final scene = state.selectedScene;
-    if (scene == null) {
-      // 无场景时，降级 textarea 需要有内容
-      return _contentController.text.trim().isNotEmpty;
-    }
+    if (scene == null) return false;
 
     // 检查必填表单字段
     for (final field in scene.formFields) {
@@ -543,7 +492,8 @@ class _InputStageState extends ConsumerState<InputStage> {
     );
   }
 
-  /// 场景切换确认（有未提交内容时弹窗）
+  // ─── 场景切换 ───
+
   void _confirmAndSwitchScene(SceneConfig scene, GenerateNotifier notifier) {
     final hasContent = _fieldValues.values.any((v) => v.trim().isNotEmpty) ||
         _coverValues.values.any((v) => v.trim().isNotEmpty);
@@ -595,53 +545,4 @@ class _InputStageState extends ConsumerState<InputStage> {
         'tech_proposal' => Icons.computer_outlined,
         _ => Icons.article_outlined,
       };
-}
-
-class _ModeChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _ModeChip({
-    required this.label,
-    required this.icon,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          decoration: BoxDecoration(
-            color: isActive ? AppColors.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            boxShadow: isActive
-                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 2, offset: const Offset(0, 1))]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 14, color: isActive ? AppColors.primary : AppColors.textMuted),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                  color: isActive ? AppColors.primary : AppColors.textMuted,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

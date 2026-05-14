@@ -1,12 +1,33 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/storage/local_cache.dart';
 import '../../data/payment_data_source.dart';
 import '../../data/models/payment_models.dart';
 
-/// 全局配额 Provider
+const _quotaCacheKey = 'user_quota';
+const _quotaCacheTtl = Duration(minutes: 5);
+
+/// 全局配额 Provider（带本地缓存，TTL 5分钟）
 final quotaProvider = FutureProvider<QuotaInfo>((ref) async {
-  return PaymentDataSource().getMyQuota();
+  // 优先从缓存读取
+  final cached = LocalCache.instance.getWithTtl<Map<String, dynamic>>(_quotaCacheKey);
+  if (cached != null) {
+    try {
+      return QuotaInfo.fromJson(cached);
+    } catch (_) {
+      await LocalCache.instance.delete(_quotaCacheKey);
+    }
+  }
+
+  final quota = await PaymentDataSource().getMyQuota();
+
+  // 写入缓存
+  try {
+    await LocalCache.instance.set(_quotaCacheKey, quota.toJson(), ttl: _quotaCacheTtl);
+  } catch (_) {}
+
+  return quota;
 });
 
 /// 支付状态管理

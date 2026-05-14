@@ -201,9 +201,8 @@ class DocumentDetailNotifier extends StateNotifier<DocumentDetailState> {
       final doc = await _ds.getDocument(docId);
       state = DocumentDetailState(document: doc);
 
-      // 运行中/排队中 → 自动连 SSE
+      // 运行中/排队中 → 自动连 SSE（仅初次加载重置重试计数）
       if (doc.status == DocStatus.running || doc.status == DocStatus.pending) {
-        _sseRetryCount = 0;
         _connectStream(docId);
       }
     } catch (e) {
@@ -238,24 +237,25 @@ class DocumentDetailNotifier extends StateNotifier<DocumentDetailState> {
         );
       },
       onDone: () async {
+        if (!mounted) return;
+        // 先刷新获取最新状态，判断任务是否已终态
+        await _silentRefresh(docId);
         final doc = state.document;
-        // SSE 正常结束且进度满 → 文档已完成，静默刷新获取最终状态
-        if (doc != null && doc.progress >= 1.0) {
-          await Future.delayed(const Duration(milliseconds: 500));
-          if (mounted) await _silentRefresh(docId);
+        if (doc != null && doc.status != DocStatus.running && doc.status != DocStatus.pending) {
           return;
         }
         _sseRetryCount++;
         if (_sseRetryCount <= _maxSseRetry) {
-          await Future.delayed(const Duration(seconds: 1));
-          if (mounted) load(docId);
+          await Future.delayed(const Duration(seconds: 2));
+          if (mounted) _connectStream(docId);
         }
       },
       onError: (e) async {
+        if (!mounted) return;
         _sseRetryCount++;
         if (_sseRetryCount <= _maxSseRetry) {
-          await Future.delayed(const Duration(seconds: 2));
-          if (mounted) load(docId);
+          await Future.delayed(const Duration(seconds: 3));
+          if (mounted) _connectStream(docId);
         }
       },
     );
@@ -280,7 +280,7 @@ class DocumentDetailNotifier extends StateNotifier<DocumentDetailState> {
 }
 
 final documentDetailProvider =
-    StateNotifierProvider.family<DocumentDetailNotifier, DocumentDetailState, int>(
+    StateNotifierProvider.family.autoDispose<DocumentDetailNotifier, DocumentDetailState, int>(
   (ref, docId) {
     final notifier = DocumentDetailNotifier();
     notifier.load(docId);

@@ -106,7 +106,7 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
       }
     });
 
-    final title = state.docTitle.isNotEmpty ? state.docTitle : state.selectedType.label;
+    final title = state.docTitle.isNotEmpty ? state.docTitle : (state.selectedScene?.name ?? '文档');
     final hasResult = state.resultData != null;
     final wordCount = hasResult ? (state.resultData?['word_count'] ?? '--') : '--';
     final chapterCount = hasResult ? (state.resultData?['chapter_count'] ?? state.outline.length) : state.outline.length;

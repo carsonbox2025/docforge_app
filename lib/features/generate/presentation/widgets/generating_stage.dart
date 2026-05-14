@@ -73,7 +73,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
         FeatureHeader(
           color: hasError ? AppColors.error : AppColors.primary,
           title: hasError ? '生成失败' : '正在生成',
-          subtitle: '${state.selectedType.label} · ${state.selectedLanguage.label}',
+          subtitle: '${state.selectedScene?.name ?? '文档'} · ${state.selectedLanguage.label}',
           showBackButton: true,
           onBack: () => notifier.backToInput(),
         ),
@@ -281,7 +281,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    state.docTitle.isEmpty ? state.selectedType.label : state.docTitle,
+                    state.docTitle.isEmpty ? (state.selectedScene?.name ?? '文档') : state.docTitle,
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text),
                   ),
                 ),

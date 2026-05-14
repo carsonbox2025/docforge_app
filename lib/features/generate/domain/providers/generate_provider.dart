@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/generate_data_source.dart';
@@ -8,10 +9,14 @@ import '../../../../shared/models/dsl/dsl_node.dart' show DslNode, DslOutline;
 import '../../../../shared/utils/file_export.dart';
 import '../../../scene/data/models/scene_models.dart';
 
+void _log(String message) {
+  if (kDebugMode) debugPrint(message);
+}
+
 enum GenerationStatus { idle, planning, generating, complete, error }
 
 final generateProvider =
-    StateNotifierProvider<GenerateNotifier, GenerateState>((ref) {
+    StateNotifierProvider.autoDispose<GenerateNotifier, GenerateState>((ref) {
   return GenerateNotifier(GenerateDataSource());
 });
 
@@ -19,12 +24,9 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
   final GenerateDataSource _dataSource;
   StreamSubscription? _progressSub;
   int? _currentTaskId;
+  bool _disposed = false;
 
   GenerateNotifier(this._dataSource) : super(const GenerateState());
-
-  void selectDocType(DocType type) {
-    state = state.copyWith(selectedType: type);
-  }
 
   void selectLanguage(DocLanguage lang) {
     state = state.copyWith(selectedLanguage: lang);
@@ -42,12 +44,12 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     state = state.copyWith(mode: mode);
   }
 
-  /// 选择场景
+  /// 选择场景 — 根据 layer 自动决定 mode
   void selectScene(SceneConfig scene) {
-    state = state.copyWith(
-      selectedScene: scene,
-      selectedType: _docTypeFromScene(scene),
-    );
+    final autoMode = scene.isLayer2 ? 'professional' : 'quick';
+    _log('[Generate] selectScene: sceneId=${scene.sceneId}, name=${scene.name}, '
+        'docType=${scene.docType}, layer=${scene.layer}, autoMode=$autoMode');
+    state = state.copyWith(selectedScene: scene, mode: autoMode);
   }
 
   /// 更新表单字段值
@@ -60,21 +62,23 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     state = state.copyWith(fieldsData: fields);
   }
 
-  static DocType _docTypeFromScene(SceneConfig scene) {
-    return DocType.values.firstWhere(
-      (t) => t.code == scene.docType,
-      orElse: () => DocType.contract,
-    );
-  }
-
   /// 提交生成任务（异步后台执行）
-  Future<void> startGenerate({bool outlineOnly = false}) async {
+  Future<void> startGenerate() async {
     final scene = state.selectedScene;
+    if (scene == null) {
+      _log('[Generate] startGenerate FAILED: no scene selected');
+      state = state.copyWith(error: '请先选择文档场景');
+      return;
+    }
+
     final content = _assembleContent(scene);
     if (content.trim().isEmpty) {
       state = state.copyWith(error: '请填写内容后再提交');
       return;
     }
+
+    _log('[Generate] startGenerate: sceneId=${scene.sceneId}, docType=${scene.docType}, '
+        'layer=${scene.layer}, templateId=${scene.templateId}, mode=${state.mode}');
 
     state = state.copyWith(
       stage: GenerateStage.generating,
@@ -93,21 +97,23 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     );
 
     final request = GenerateRequest(
-      templateId: scene?.templateId ?? state.selectedType.defaultTemplateId,
+      templateId: scene.templateId,
       content: content,
       language: state.selectedLanguage,
       title: state.docTitle.isEmpty ? null : state.docTitle,
-      outlineOnly: outlineOnly,
       mode: state.mode,
-      docType: scene?.docType ?? state.selectedType.code,
-      sceneId: scene?.sceneId,
-      layer: scene?.layer,
+      docType: scene.docType,
+      sceneId: scene.sceneId,
+      layer: scene.layer,
       fieldsData: state.fieldsData.isNotEmpty ? state.fieldsData : null,
     );
+
+    _log('[Generate] request body: ${request.toJson()}');
 
     try {
       final taskId = await _dataSource.submitGenerateTask(request);
       _currentTaskId = taskId;
+      _log('[Generate] task submitted successfully, taskId=$taskId');
 
       state = state.copyWith(
         status: GenerationStatus.generating,
@@ -116,7 +122,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
 
       _listenProgress(taskId);
     } catch (e) {
-      debugPrint('[Generate] submit error: $e');
+      _log('[Generate] submit error: $e');
       state = state.copyWith(
         stage: GenerateStage.input,
         status: GenerationStatus.error,
@@ -131,7 +137,10 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     final stream = _dataSource.taskProgressStream(taskId);
     _progressSub = stream.listen(
       (update) {
-        if (!mounted) return;
+        if (_disposed || !mounted) return;
+
+        _log('[Generate] progress update: taskId=$taskId, progress=${update.progress}, '
+            'message=${update.message}');
 
         // 解析 DSL 更新
         final detail = update.detail;
@@ -152,12 +161,13 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
         );
       },
       onDone: () {
-        if (!mounted) return;
+        if (_disposed || !mounted) return;
+        _log('[Generate] progress stream done, checking final status for taskId=$taskId');
         _onStreamDone(taskId);
       },
       onError: (e) {
-        if (!mounted) return;
-        debugPrint('[Generate] progress stream error: $e');
+        if (_disposed || !mounted) return;
+        _log('[Generate] progress stream error for taskId=$taskId: $e');
         _pollUntilDone(taskId);
       },
     );
@@ -178,12 +188,16 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           .map((o) => DslOutline.fromJson(o as Map<String, dynamic>))
           .toList();
       if (outline.isNotEmpty) {
+        _log('[Generate] outline updated: ${outline.length} sections');
         state = state.copyWith(outline: outline);
       }
     }
 
     // 更新 active section
-    final _ = dslUpdate['active_section'] as String?;
+    final activeSection = dslUpdate['active_section'] as String?;
+    if (activeSection != null) {
+      _log('[Generate] active section: $activeSection');
+    }
 
     // 更新 DSL nodes
     final nodeUpdates = dslUpdate['node_updates'] as List<dynamic>?;
@@ -200,6 +214,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           nodes[section] = rawNodes
               .map((n) => DslNode.fromJson(n as Map<String, dynamic>))
               .toList();
+          _log('[Generate] DSL replace_all: section=$section, count=${nodes[section]!.length}');
         } else if (op == 'append') {
           final rawNode = u['node'] as Map<String, dynamic>?;
           if (rawNode != null) {
@@ -235,6 +250,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
         ));
       }
       if (outline.isNotEmpty) {
+        _log('[Generate] legacy outline updated: ${outline.length} chapters');
         state = state.copyWith(outline: outline);
       }
     }
@@ -257,7 +273,11 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
   Future<void> _onStreamDone(int taskId) async {
     try {
       final status = await _dataSource.getTaskStatus(taskId);
+      _log('[Generate] final status for taskId=$taskId: '
+          'status=${status.status}, documentId=${status.documentId}');
+
       if (status.status == TaskStatus.completed) {
+        _log('[Generate] completed: resultData=${status.resultData}');
         state = state.copyWith(
           stage: GenerateStage.review,
           status: GenerationStatus.complete,
@@ -266,6 +286,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           resultData: status.resultData,
         );
       } else if (status.status == TaskStatus.failed) {
+        _log('[Generate] failed: errorMsg=${status.errorMsg}');
         state = state.copyWith(
           stage: GenerateStage.input,
           status: GenerationStatus.error,
@@ -278,27 +299,30 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           error: '任务已取消',
         );
       } else {
+        _log('[Generate] unexpected status ${status.status}, starting poll');
         _pollUntilDone(taskId);
       }
     } catch (e) {
-      debugPrint('[Generate] status check error: $e, fallback to polling');
+      _log('[Generate] status check error: $e, starting poll');
       _pollUntilDone(taskId);
     }
   }
 
-  Future<void> _pollUntilDone(int taskId, {int maxAttempts = 120}) async {
+  Future<void> _pollUntilDone(int taskId, {int maxAttempts = 360}) async {
     for (var i = 0; i < maxAttempts; i++) {
       await Future.delayed(const Duration(seconds: 5));
-      if (!mounted) return;
+      if (_disposed || !mounted) return;
 
       try {
         final status = await _dataSource.getTaskStatus(taskId);
+        if (_disposed || !mounted) return;
         state = state.copyWith(
           progress: status.progress.clamp(0.0, 1.0),
           progressMsg: status.progressMsg,
         );
 
         if (status.status.isTerminal) {
+          _log('[Generate] poll terminal: taskId=$taskId, status=${status.status}');
           if (status.status == TaskStatus.completed) {
             state = state.copyWith(
               stage: GenerateStage.review,
@@ -323,7 +347,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           return;
         }
       } catch (e) {
-        debugPrint('[Generate] poll error: $e');
+        _log('[Generate] poll error: $e');
       }
     }
     state = state.copyWith(
@@ -362,25 +386,23 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     );
 
     if (taskId != null) {
+      _log('[Generate] cancelling taskId=$taskId');
       try {
         await _dataSource.cancelTask(taskId);
       } catch (e) {
-        debugPrint('[Generate] cancelTask failed for $taskId: $e');
+        _log('[Generate] cancelTask failed for $taskId: $e');
       }
     }
   }
 
-  /// 组装提交内容：有场景时合并表单字段，否则用原始 content
-  String _assembleContent(SceneConfig? scene) {
-    if (scene == null) return state.content;
-
+  /// 组装提交内容：基于场景表单字段组装
+  String _assembleContent(SceneConfig scene) {
     final parts = <String>[];
     for (final entry in state.formFields.entries) {
       if (entry.value.isNotEmpty) {
         parts.add('${entry.key}：${entry.value}');
       }
     }
-    // content 字段单独处理（已在 formFields 中）
     if (parts.isEmpty) return state.content;
     return parts.join('\n');
   }
@@ -389,21 +411,23 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
   Future<void> exportDocument() async {
     final docId = state.documentId;
     if (docId == null) {
-      debugPrint('[Generate] export: no document_id');
+      _log('[Generate] export: no document_id');
       return;
     }
 
     state = state.copyWith(isExporting: true);
     try {
       final bytes = await _dataSource.exportDocument(docId);
-      final title = state.docTitle.isNotEmpty ? state.docTitle : 'document';
+      final title = state.docTitle.isNotEmpty
+          ? state.docTitle
+          : state.selectedScene?.name ?? 'document';
       await FileExporter.saveAndShare(
         bytes: Uint8List.fromList(bytes),
         fileName: '$title.${state.selectedFormat.extension}',
         subject: title,
       );
     } catch (e) {
-      debugPrint('[Generate] Export error: $e');
+      _log('[Generate] Export error: $e');
       if (mounted) {
         state = state.copyWith(
           isExporting: false,
@@ -424,7 +448,9 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
 
   @override
   void dispose() {
+    _disposed = true;
     _progressSub?.cancel();
+    _progressSub = null;
     super.dispose();
   }
 }
@@ -437,7 +463,6 @@ enum StepStatus { done, active, pending }
 
 class GenerateState {
   final GenerateStage stage;
-  final DocType selectedType;
   final DocLanguage selectedLanguage;
   final String content;
   final ExportFormat selectedFormat;
@@ -454,9 +479,9 @@ class GenerateState {
   final String? progressMsg;
 
   // 模式
-  final String mode; // quick / professional / auto
+  final String mode; // quick / professional
 
-  // DSL 状态（统一）
+  // DSL 状态
   final List<DslOutline> outline;
   final Map<String, List<DslNode>> dslNodes;
 
@@ -472,7 +497,6 @@ class GenerateState {
 
   const GenerateState({
     this.stage = GenerateStage.input,
-    this.selectedType = DocType.contract,
     this.selectedLanguage = DocLanguage.zhCN,
     this.content = '',
     this.selectedFormat = ExportFormat.docx,
@@ -495,7 +519,6 @@ class GenerateState {
 
   GenerateState copyWith({
     GenerateStage? stage,
-    DocType? selectedType,
     DocLanguage? selectedLanguage,
     String? content,
     ExportFormat? selectedFormat,
@@ -519,7 +542,6 @@ class GenerateState {
   }) =>
       GenerateState(
         stage: stage ?? this.stage,
-        selectedType: selectedType ?? this.selectedType,
         selectedLanguage: selectedLanguage ?? this.selectedLanguage,
         content: content ?? this.content,
         selectedFormat: selectedFormat ?? this.selectedFormat,

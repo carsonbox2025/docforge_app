@@ -47,11 +47,10 @@ class GenerateRequest {
   final String content;
   final DocLanguage language;
   final String? title;
-  final bool outlineOnly;
   final String mode; // quick / professional
-  final String docType; // contract/bid/resume/...
-  final String? sceneId;
-  final int? layer;
+  final String docType;
+  final String sceneId;
+  final int layer;
   final Map<String, String>? fieldsData;
 
   const GenerateRequest({
@@ -59,11 +58,10 @@ class GenerateRequest {
     required this.content,
     required this.language,
     this.title,
-    this.outlineOnly = false,
     this.mode = 'quick',
-    this.docType = 'contract',
-    this.sceneId,
-    this.layer,
+    required this.docType,
+    required this.sceneId,
+    required this.layer,
     this.fieldsData,
   });
 
@@ -77,8 +75,8 @@ class GenerateRequest {
           'mode': mode,
         },
         if (title != null) 'title': title,
-        if (sceneId != null) 'scene_id': sceneId,
-        if (layer != null) 'layer': layer,
+        'scene_id': sceneId,
+        'layer': layer,
         if (fieldsData != null) 'fields_data': fieldsData,
       };
 }

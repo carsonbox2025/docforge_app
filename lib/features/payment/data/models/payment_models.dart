@@ -98,4 +98,11 @@ class QuotaInfo {
         'yearly' => '年度会员',
         _ => planType,
       };
+
+  Map<String, dynamic> toJson() => {
+        'plan_type': planType,
+        'expires_at': expiresAt,
+        'quotas': quotas,
+        'used': used,
+      };
 }

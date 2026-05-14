@@ -1,8 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/app_constants.dart';
+
+void _log(String message) {
+  if (kDebugMode) debugPrint(message);
+}
 
 /// 任务类型（兼容旧引用）
 enum TaskType { generate, polish, translate }
@@ -77,7 +82,7 @@ class TaskStatusData {
         progressDetail: json['progress_detail'] as Map<String, dynamic>?,
         resultData: json['result_data'] as Map<String, dynamic>?,
         errorMsg: json['error_msg'] as String?,
-        documentId: json['document_id'] as int?,
+        documentId: (json['document_id'] as int?) ?? (json['id'] as int?),
         createdAt: json['created_at'] as String?,
         completedAt: json['completed_at'] as String?,
       );
@@ -95,24 +100,31 @@ class TaskDataSource {
     String? targetLang,
     String docType = 'generic',
   }) async {
+    final payload = {
+      'doc_type': docType,
+      'source_type': taskType.name,
+      'user_input': userInput,
+      'template_id': ?templateId,
+      'title': ?title,
+      'polish_level': ?polishLevel,
+      'source_lang': ?sourceLang,
+      'target_lang': ?targetLang,
+    };
+    _log('[TaskDataSource] submitTask: docType=$docType, taskType=${taskType.name}, '
+        'templateId=$templateId, sceneId=${userInput['scene_id']}, layer=${userInput['layer']}');
+
     final response = await ApiClient.instance.post<Map<String, dynamic>>(
       '/document/submit',
-      data: {
-        'doc_type': docType,
-        'source_type': taskType.name,
-        'user_input': userInput,
-        'template_id': ?templateId,
-        'title': ?title,
-        'polish_level': ?polishLevel,
-        'source_lang': ?sourceLang,
-        'target_lang': ?targetLang,
-      },
+      data: payload,
     );
     final data = response.data!;
     if (data['code'] != 200) {
+      _log('[TaskDataSource] submitTask FAILED: code=${data['code']}, message=${data['message']}');
       throw Exception(data['message'] ?? '任务提交失败');
     }
-    return data['data']['id'] as int;
+    final taskId = data['data']['id'] as int;
+    _log('[TaskDataSource] submitTask success: taskId=$taskId');
+    return taskId;
   }
 
   /// 查询任务状态 → GET /document/{id}
@@ -122,24 +134,32 @@ class TaskDataSource {
     );
     final data = response.data!;
     if (data['code'] != 200) {
+      _log('[TaskDataSource] getTaskStatus FAILED: taskId=$taskId, code=${data['code']}');
       throw Exception(data['message'] ?? '查询失败');
     }
-    return TaskStatusData.fromJson(data['data'] as Map<String, dynamic>);
+    final statusData = TaskStatusData.fromJson(data['data'] as Map<String, dynamic>);
+    _log('[TaskDataSource] getTaskStatus: taskId=$taskId, status=${statusData.status}, '
+        'progress=${statusData.progress}, documentId=${statusData.documentId}');
+    return statusData;
   }
 
   /// SSE 实时进度流 → /document/{id}/stream（独立 Dio 实例，避免占用连接池）
   Stream<TaskProgress> progressStream(int taskId, {CancelToken? cancelToken}) async* {
+    final mainDio = ApiClient.instance.dio;
     final dio = Dio(BaseOptions(
-      baseUrl: ApiClient.instance.dio.options.baseUrl,
+      baseUrl: mainDio.options.baseUrl,
       connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 60),
+      receiveTimeout: const Duration(minutes: 30),
+      headers: {
+        ...mainDio.options.headers,
+      },
     ));
     try {
       final response = await dio.get<ResponseBody>(
         '/document/$taskId/stream',
         options: Options(
           responseType: ResponseType.stream,
-          receiveTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(minutes: 30),
           sendTimeout: const Duration(seconds: 10),
         ),
         cancelToken: cancelToken,
@@ -232,11 +252,13 @@ class TaskDataSource {
 
   /// 导出文档
   Future<List<int>> exportDocument(int documentId, String format) async {
+    _log('[TaskDataSource] exportDocument: documentId=$documentId, format=$format');
     final response = await ApiClient.instance.post<List<int>>(
       '/export/word',
       data: {'document_id': documentId, 'format': format},
       options: Options(responseType: ResponseType.bytes),
     );
+    _log('[TaskDataSource] exportDocument success: ${response.data?.length ?? 0} bytes');
     return response.data!;
   }
 
