@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/auth/presentation/pages/splash_page.dart';
 import '../features/auth/presentation/pages/login_page.dart';
 import '../features/auth/presentation/pages/register_page.dart';
 import '../features/auth/domain/providers/auth_provider.dart';
@@ -25,6 +26,18 @@ import 'shell.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
+CustomTransitionPage _fastFadePage(Widget child, ValueKey<String> key) {
+  return CustomTransitionPage(
+    key: key,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 150),
+    reverseTransitionDuration: const Duration(milliseconds: 150),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
+  );
+}
+
 class _AuthListenable extends ChangeNotifier {
   void notify() => notifyListeners();
 }
@@ -42,17 +55,25 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: authNotifier,
     redirect: (context, state) {
       final authState = ref.read(authProvider);
+      final isSplashPage = state.matchedLocation == '/splash';
       final isAuthPage = state.matchedLocation == '/login' ||
           state.matchedLocation == '/register';
       final isAuthenticated = authState.isAuthenticated;
       final isRestoring = authState.isLoading;
 
-      if (isRestoring) return null;
-      if (!isAuthenticated && !isAuthPage) return '/login';
-      if (isAuthenticated && isAuthPage) return '/';
-      return null;
+      if (isRestoring) return isSplashPage ? null : '/splash';
+
+      // /splash 页由 SplashPage 自行监听 auth 状态后导航
+      if (isSplashPage) return null;
+
+      if (!isAuthenticated) {
+        return isAuthPage ? null : '/login';
+      } else {
+        return isAuthPage ? '/' : null;
+      }
     },
     routes: [
+      GoRoute(path: '/splash', builder: (_, _) => const SplashPage()),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),
 
@@ -83,23 +104,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      GoRoute(path: '/notifications', builder: (_, _) => const NotificationPage()),
-      GoRoute(path: '/subscription', builder: (_, _) => const SubscriptionPage()),
-      GoRoute(path: '/templates', builder: (_, _) => const TemplateGalleryPage()),
-      GoRoute(path: '/templates/:id', builder: (_, state) {
+      GoRoute(path: '/notifications', pageBuilder: (_, _) => _fastFadePage(const NotificationPage(), const ValueKey('notifications'))),
+      GoRoute(path: '/subscription', pageBuilder: (_, _) => _fastFadePage(const SubscriptionPage(), const ValueKey('subscription'))),
+      GoRoute(path: '/templates', pageBuilder: (_, _) => _fastFadePage(const TemplateGalleryPage(), const ValueKey('templates'))),
+      GoRoute(path: '/templates/:id', pageBuilder: (_, state) {
         final id = state.pathParameters['id'] ?? '';
-        return TemplatePreviewPage(templateId: id);
+        return _fastFadePage(TemplatePreviewPage(templateId: id), ValueKey('template-$id'));
       }),
-      GoRoute(path: '/documents', builder: (_, _) => const DocumentCenterPage()),
-      GoRoute(path: '/documents/:id', builder: (_, state) {
+      GoRoute(path: '/documents', pageBuilder: (_, _) => _fastFadePage(const DocumentCenterPage(), const ValueKey('documents'))),
+      GoRoute(path: '/documents/:id', pageBuilder: (_, state) {
         final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-        return DocumentDetailPage(docId: id);
+        return _fastFadePage(DocumentDetailPage(docId: id), ValueKey('doc-$id'));
       }),
-      GoRoute(path: '/glossary', builder: (_, _) => const GlossaryPage()),
-      GoRoute(path: '/search', builder: (_, _) => const SearchPage()),
-      GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
-      GoRoute(path: '/usage', builder: (_, _) => const UsagePage()),
-      GoRoute(path: '/drafts', builder: (_, _) => const DraftsPage()),
+      GoRoute(path: '/glossary', pageBuilder: (_, _) => _fastFadePage(const GlossaryPage(), const ValueKey('glossary'))),
+      GoRoute(path: '/search', pageBuilder: (_, _) => _fastFadePage(const SearchPage(), const ValueKey('search'))),
+      GoRoute(path: '/settings', pageBuilder: (_, _) => _fastFadePage(const SettingsPage(), const ValueKey('settings'))),
+      GoRoute(path: '/usage', pageBuilder: (_, _) => _fastFadePage(const UsagePage(), const ValueKey('usage'))),
+      GoRoute(path: '/drafts', pageBuilder: (_, _) => _fastFadePage(const DraftsPage(), const ValueKey('drafts'))),
     ],
   );
 });

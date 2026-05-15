@@ -21,6 +21,7 @@ class _RecentDocumentsState extends ConsumerState<RecentDocuments> {
     Future.microtask(() => ref.read(documentListProvider.notifier).load(
           tab: DocCenterTab.all,
           page: 1,
+          silentIfHasData: true,
         ));
   }
 

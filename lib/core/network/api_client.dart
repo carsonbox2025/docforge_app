@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import '../constants/app_constants.dart';
 import 'api_interceptor.dart';
@@ -20,6 +22,12 @@ class ApiClient {
       headers: {'Content-Type': 'application/json'},
     ));
     _dio.interceptors.add(ApiInterceptor());
+
+    _dio.httpClientAdapter = IOHttpClientAdapter(createHttpClient: () {
+      final client = HttpClient();
+      client.idleTimeout = const Duration(seconds: 60);
+      return client;
+    });
   }
 
   void setUnauthorizedCallback(VoidCallback callback) {

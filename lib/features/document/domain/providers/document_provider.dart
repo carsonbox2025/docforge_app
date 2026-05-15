@@ -17,9 +17,6 @@ class DocumentListState {
   final DocCenterTab tab;
   final int currentPage;
   final bool hasMore;
-  final int? runningTotal;
-  final int? pendingTotal;
-
   const DocumentListState({
     this.items = const [],
     this.total = 0,
@@ -28,16 +25,7 @@ class DocumentListState {
     this.tab = DocCenterTab.all,
     this.currentPage = 1,
     this.hasMore = true,
-    this.runningTotal,
-    this.pendingTotal,
   });
-
-  int get effectiveTotal {
-    if (tab == DocCenterTab.running) {
-      return (runningTotal ?? 0) + (pendingTotal ?? 0);
-    }
-    return total;
-  }
 
   DocumentListState copyWith({
     List<DocForgeDocument>? items,
@@ -47,8 +35,6 @@ class DocumentListState {
     DocCenterTab? tab,
     int? currentPage,
     bool? hasMore,
-    int? runningTotal,
-    int? pendingTotal,
     bool clearError = false,
   }) =>
       DocumentListState(
@@ -59,67 +45,52 @@ class DocumentListState {
         tab: tab ?? this.tab,
         currentPage: currentPage ?? this.currentPage,
         hasMore: hasMore ?? this.hasMore,
-        runningTotal: runningTotal ?? this.runningTotal,
-        pendingTotal: pendingTotal ?? this.pendingTotal,
       );
 }
 
 class DocumentListNotifier extends StateNotifier<DocumentListState> {
   DocumentListNotifier() : super(const DocumentListState());
 
-  DocStatus? _statusForTab() {
-    if (state.tab == DocCenterTab.running) return DocStatus.running;
-    if (state.tab == DocCenterTab.completed) return DocStatus.completed;
+  List<DocStatus>? _statusesForTab(DocCenterTab tab) {
+    if (tab == DocCenterTab.running) return [DocStatus.running, DocStatus.pending];
+    if (tab == DocCenterTab.completed) return [DocStatus.completed];
     return null;
   }
 
-  /// 加载 pending 文档并合并排序（running Tab 专用）
-  Future<({List<DocForgeDocument> docs, int? pendingTotal})> _loadPendingDocs(int page) async {
-    try {
-      final pendingResult = await _ds.listDocuments(status: DocStatus.pending, page: page);
-      final pendingRaw = pendingResult['items'] as List<dynamic>? ?? [];
-      final pendingDocs = pendingRaw
-          .map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>))
-          .toList();
-      return (
-        docs: pendingDocs,
-        pendingTotal: pendingResult['total'] as int?,
-      );
-    } catch (e) {
-      debugPrint('[DocumentList] load pending error: $e');
-      return (docs: <DocForgeDocument>[], pendingTotal: null as int?);
-    }
-  }
+  /// 加载文档列表。当已有缓存数据时静默刷新（不清空、不闪屏）。
+  Future<void> load({DocCenterTab? tab, int page = 1, bool silentIfHasData = false}) async {
+    final targetTab = tab ?? state.tab;
+    final hasCachedData = state.items.isNotEmpty && state.tab == targetTab && state.error == null;
+    final silent = silentIfHasData && hasCachedData;
 
-  Future<void> load({DocCenterTab? tab, int page = 1}) async {
-    state = state.copyWith(isLoading: true, clearError: true, tab: tab ?? state.tab);
+    if (!silent) {
+      state = state.copyWith(isLoading: true, clearError: true, tab: targetTab);
+    } else {
+      state = state.copyWith(clearError: true, tab: targetTab);
+    }
     try {
-      final status = _statusForTab();
-      final result = await _ds.listDocuments(status: status, page: page);
+      final statuses = _statusesForTab(targetTab);
+      final result = await _ds.listDocuments(statuses: statuses, page: page);
       final rawItems = result['items'] as List<dynamic>? ?? [];
       final docs = rawItems
           .map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>))
           .toList();
 
-      int? pendingTotal;
-      if (state.tab == DocCenterTab.running) {
-        final pending = await _loadPendingDocs(page);
-        pendingTotal = pending.pendingTotal;
-        docs.addAll(pending.docs);
+      if (targetTab == DocCenterTab.running) {
         docs.sort((a, b) => (b.createdAt ?? '').compareTo(a.createdAt ?? ''));
       }
 
+      if (!mounted) return;
       final totalCount = result['total'] as int? ?? 0;
       state = state.copyWith(
         items: docs,
         total: totalCount,
         isLoading: false,
         currentPage: page,
-        runningTotal: state.tab == DocCenterTab.running ? totalCount : null,
-        pendingTotal: pendingTotal,
-        hasMore: docs.length < (state.tab == DocCenterTab.running ? totalCount + (pendingTotal ?? 0) : totalCount),
+        hasMore: docs.length < totalCount,
       );
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -129,33 +100,24 @@ class DocumentListNotifier extends StateNotifier<DocumentListState> {
     state = state.copyWith(isLoading: true);
     final nextPage = state.currentPage + 1;
     try {
-      final status = _statusForTab();
-      final result = await _ds.listDocuments(status: status, page: nextPage);
+      final statuses = _statusesForTab(state.tab);
+      final result = await _ds.listDocuments(statuses: statuses, page: nextPage);
       final rawItems = result['items'] as List<dynamic>? ?? [];
       final newDocs = rawItems
           .map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>))
           .toList();
 
-      int? pendingTotal;
       if (state.tab == DocCenterTab.running) {
-        final pending = await _loadPendingDocs(nextPage);
-        pendingTotal = pending.pendingTotal;
-        newDocs.addAll(pending.docs);
         newDocs.sort((a, b) => (b.createdAt ?? '').compareTo(a.createdAt ?? ''));
       }
 
-      final runningTotal = result['total'] as int? ?? 0;
-      final totalCount = state.tab == DocCenterTab.running
-          ? runningTotal + (pendingTotal ?? state.pendingTotal ?? 0)
-          : runningTotal;
+      final totalCount = result['total'] as int? ?? 0;
       final allItems = [...state.items, ...newDocs];
       state = state.copyWith(
         items: allItems,
-        total: runningTotal,
+        total: totalCount,
         isLoading: false,
         currentPage: nextPage,
-        runningTotal: state.tab == DocCenterTab.running ? runningTotal : null,
-        pendingTotal: pendingTotal ?? state.pendingTotal,
         hasMore: allItems.length < totalCount,
       );
     } catch (e) {

@@ -38,7 +38,7 @@ class DocumentDataSource {
 
   /// 文档列表
   Future<Map<String, dynamic>> listDocuments({
-    DocStatus? status,
+    List<DocStatus>? statuses,
     String? docType,
     int page = 1,
     int pageSize = 20,
@@ -47,7 +47,9 @@ class DocumentDataSource {
       'page': page,
       'page_size': pageSize,
     };
-    if (status != null) queryParams['status'] = status.code;
+    if (statuses != null && statuses.isNotEmpty) {
+      queryParams['status'] = statuses.map((s) => s.code).join(',');
+    }
     if (docType != null) queryParams['doc_type'] = docType;
 
     final response = await ApiClient.instance.get<Map<String, dynamic>>(

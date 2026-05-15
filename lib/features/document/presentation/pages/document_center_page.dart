@@ -34,6 +34,7 @@ class _DocumentCenterPageState extends ConsumerState<DocumentCenterPage>
     _scrollController.addListener(_onScroll);
     Future.microtask(() => ref.read(documentListProvider.notifier).load(
           tab: DocCenterTab.values[initialIndex],
+          silentIfHasData: true,
         ));
   }
 
