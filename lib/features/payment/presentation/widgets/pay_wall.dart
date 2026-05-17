@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/storage/local_cache.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/payment_channel_card.dart';
 import '../../../scene/data/models/scene_models.dart';
@@ -233,6 +234,9 @@ class _PayWallState extends ConsumerState<PayWall> {
     try {
       final paid = await ref.read(paymentProvider.notifier).pollUntilPaid(_orderNo!, maxAttempts: 30);
       if (paid) {
+        // 清除配额缓存并刷新 Provider
+        await LocalCache.instance.delete('user_quota');
+        ref.invalidate(quotaProvider);
         widget.onPaid();
         if (mounted) {
           setState(() => _step = _PayStep.done);

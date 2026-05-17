@@ -7,6 +7,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../auth/domain/providers/auth_provider.dart';
+import '../../../payment/domain/providers/payment_provider.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -21,7 +22,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final authState = ref.watch(authProvider);
     final user = authState.user;
     final displayName = user?.username ?? user?.phone ?? '用户';
-    final isAdmin = user?.isAdmin ?? false;
+    final quotaAsync = ref.watch(quotaProvider);
+    final isPro = quotaAsync.maybeWhen(
+      data: (quota) => quota.isPro,
+      orElse: () => false,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -29,7 +34,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(displayName, isAdmin),
+            _buildHeader(displayName, isPro),
             _buildStatsRow(),
             _buildQuotaCard(),
             _buildSubscriptionBanner(),
@@ -91,7 +96,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
   // ─── Blue header with avatar ───────────────────────────────────────────────
 
-  Widget _buildHeader(String displayName, bool isAdmin) {
+  Widget _buildHeader(String displayName, bool isPro) {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.primary,
@@ -154,7 +159,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      if (isAdmin)
+                      if (isPro)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
