@@ -664,9 +664,24 @@ class _ResultStage extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  _ExportFormatSelector(
-                    selectedFormat: state.exportFormat,
-                    onChanged: (fmt) => notifier.setExportFormat(fmt),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.successBg,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(color: AppColors.success, width: 1.5),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.description_outlined, size: 20, color: AppColors.success),
+                          SizedBox(width: 8),
+                          Text('Word 文档 (.docx)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text)),
+                        ],
+                      ),
+                    ),
                   ),
 
                   // Action buttons

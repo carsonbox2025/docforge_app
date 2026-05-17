@@ -82,7 +82,7 @@ class TaskStatusData {
         progress: (json['progress'] as num?)?.toDouble() ?? 0,
         progressMsg: json['progress_msg'] as String?,
         progressDetail: json['progress_detail'] as Map<String, dynamic>?,
-        resultData: json['result_data'] as Map<String, dynamic>?,
+        resultData: json['dsl_content'] as Map<String, dynamic>? ?? json['result_data'] as Map<String, dynamic>?,
         errorMsg: json['error_msg'] as String?,
         documentId: (json['document_id'] as int?) ?? (json['id'] as int?),
         title: json['title'] as String?,

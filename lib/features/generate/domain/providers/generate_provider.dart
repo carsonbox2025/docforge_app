@@ -44,12 +44,31 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     state = state.copyWith(mode: mode);
   }
 
-  /// 选择场景 — 根据 layer 自动决定 mode
+  /// 选择场景 — 根据 layer 自动决定 mode，清空上次生成状态
   void selectScene(SceneConfig scene) {
     final autoMode = scene.isLayer2 ? 'professional' : 'quick';
     _log('[Generate] selectScene: sceneId=${scene.sceneId}, name=${scene.name}, '
         'docType=${scene.docType}, layer=${scene.layer}, autoMode=$autoMode');
-    state = state.copyWith(selectedScene: scene, mode: autoMode);
+    _progressSub?.cancel();
+    _currentTaskId = null;
+    state = state.copyWith(
+      selectedScene: scene,
+      mode: autoMode,
+      stage: GenerateStage.input,
+      status: GenerationStatus.idle,
+      docTitle: '',
+      content: '',
+      formFields: {},
+      fieldsData: {},
+      outline: [],
+      dslNodes: {},
+      streamingBlocks: {},
+      documentId: null,
+      resultData: null,
+      progress: 0,
+      progressMsg: null,
+      clearError: true,
+    );
   }
 
   /// 更新表单字段值
@@ -84,16 +103,13 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       stage: GenerateStage.generating,
       status: GenerationStatus.planning,
       progress: 0,
+      docTitle: '',
       outline: [],
       dslNodes: {},
       streamingBlocks: {},
-      clearError: true,
-    );
-
-    // 清空上一次生成结果
-    state = state.copyWith(
       documentId: null,
       resultData: null,
+      clearError: true,
     );
 
     final request = GenerateRequest(
@@ -106,6 +122,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       sceneId: scene.sceneId,
       layer: scene.layer,
       fieldsData: state.fieldsData.isNotEmpty ? state.fieldsData : null,
+      formFields: state.formFields.isNotEmpty ? state.formFields : null,
     );
 
     _log('[Generate] request body: ${request.toJson()}');

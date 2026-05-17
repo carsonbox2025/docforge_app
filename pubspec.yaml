@@ -50,6 +50,9 @@ dependencies:
   # Share
   share_plus: ^10.0.0
 
+  # Open file with system app
+  open_filex: ^4.6.0
+
   # WebView (HTML preview)
   webview_flutter: ^4.10.0
 

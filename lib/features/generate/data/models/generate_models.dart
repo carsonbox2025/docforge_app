@@ -52,6 +52,7 @@ class GenerateRequest {
   final String sceneId;
   final int layer;
   final Map<String, String>? fieldsData;
+  final Map<String, String>? formFields;
 
   const GenerateRequest({
     required this.templateId,
@@ -63,6 +64,7 @@ class GenerateRequest {
     required this.sceneId,
     required this.layer,
     this.fieldsData,
+    this.formFields,
   });
 
   Map<String, dynamic> toJson() => {
@@ -70,6 +72,7 @@ class GenerateRequest {
         'source_type': 'generate',
         'template_id': templateId,
         'user_input': {
+          if (formFields != null) ...formFields!,
           'content': content,
           'language': language.code,
           'mode': mode,

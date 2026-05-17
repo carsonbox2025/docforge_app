@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:open_filex/open_filex.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../shared/models/export_format.dart';
+import '../../../../shared/utils/file_export.dart';
 import '../../../generate/data/models/generate_models.dart';
 import '../../../../shared/models/dsl/dsl_node.dart';
 import '../../../../shared/widgets/dsl/dsl_renderer.dart';
@@ -413,70 +412,6 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
   }
 
   Future<void> _export(int docId) async {
-    final format = await showModalBottomSheet<ExportFormat>(
-      context: context,
-      backgroundColor: Theme.of(context).cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('选择导出格式', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 16),
-              ...ExportFormat.values.map((fmt) {
-                final (iconBgColor, iconColor) = switch (fmt) {
-                  ExportFormat.docx => (AppColors.primaryBg, AppColors.primary),
-                  ExportFormat.pdf => (AppColors.errorBg, AppColors.error),
-                  ExportFormat.html => (AppColors.ctaBg, AppColors.cta),
-                };
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: InkWell(
-                    onTap: () => Navigator.pop(ctx, fmt),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.border),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40, height: 40,
-                            decoration: BoxDecoration(color: iconBgColor, borderRadius: BorderRadius.circular(8)),
-                            child: Icon(fmt.icon, size: 22, color: iconColor),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(fmt.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                                Text(fmt.extension, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (format == null || !mounted) return;
-
     try {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('正在导出...'), duration: Duration(seconds: 30)),
@@ -485,20 +420,26 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
       final ds = DocumentDataSource();
       final bytes = await ds.exportWord(docId);
 
-      final dir = await getTemporaryDirectory();
       final doc = ref.read(documentDetailProvider(widget.docId)).document;
-      final fileName = '${doc?.title ?? '文档'}$docId${format.extension}';
-      final safeName = fileName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-      final file = File('${dir.path}/$safeName');
-      await file.writeAsBytes(bytes);
+      final fileName = '${doc?.title ?? '文档'}$docId.docx';
+
+      final result = await FileExporter.saveAndOpen(bytes: Uint8List.fromList(bytes), fileName: fileName);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')],
-        subject: doc?.title ?? '文档',
-      );
+      if (result.openResult.type == ResultType.done) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('导出成功，已打开'), duration: Duration(seconds: 2)),
+        );
+      } else {
+        // 无法打开（如模拟器无 Office 应用），弹出分享
+        await FileExporter.saveAndShare(
+          bytes: Uint8List.fromList(bytes),
+          fileName: fileName,
+          subject: doc?.title ?? '文档',
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();

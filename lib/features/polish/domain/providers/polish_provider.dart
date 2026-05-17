@@ -233,7 +233,17 @@ class PolishNotifier extends StateNotifier<PolishState> {
     try {
       final status = await _dataSource.getTaskStatus(taskId);
       if (status.status == TaskStatus.completed) {
-        final polished = state.streamingText;
+        String polished = state.streamingText;
+
+        // 从 dsl_content 提取润色结果
+        final dslContent = status.resultData;
+        if (dslContent != null) {
+          final extracted = _extractTextFromDsl(dslContent);
+          if (extracted.isNotEmpty) {
+            polished = extracted;
+          }
+        }
+
         state = state.copyWith(
           isProcessing: false,
           stage: PolishStage.result,
@@ -265,6 +275,21 @@ class PolishNotifier extends StateNotifier<PolishState> {
         );
       }
     }
+  }
+
+  String _extractTextFromDsl(Map<String, dynamic> dsl) {
+    final children = dsl['children'] as List<dynamic>? ?? [];
+    final texts = <String>[];
+    for (final section in children) {
+      final nodes = section['children'] as List<dynamic>? ?? [];
+      for (final node in nodes) {
+        final text = node['text'] as String?;
+        if (text != null && text.isNotEmpty) {
+          texts.add(text);
+        }
+      }
+    }
+    return texts.join('\n\n');
   }
 
   PolishResult _buildResult(String polishedText, String originalText) {

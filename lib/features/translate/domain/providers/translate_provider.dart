@@ -237,7 +237,17 @@ class TranslateNotifier extends StateNotifier<TranslateState> {
     try {
       final status = await _dataSource.getTaskStatus(taskId);
       if (status.status == TaskStatus.completed) {
-        final translated = state.translatedText;
+        String translated = state.translatedText;
+
+        // 从 dsl_content 提取翻译结果
+        final dslContent = status.resultData;
+        if (dslContent != null) {
+          final extracted = _extractTextFromDsl(dslContent);
+          if (extracted.isNotEmpty) {
+            translated = extracted;
+          }
+        }
+
         state = state.copyWith(
           translatedText: translated,
           isLoading: false,
@@ -261,6 +271,21 @@ class TranslateNotifier extends StateNotifier<TranslateState> {
         state = state.copyWith(isLoading: false, errorMessage: '翻译失败');
       }
     }
+  }
+
+  String _extractTextFromDsl(Map<String, dynamic> dsl) {
+    final children = dsl['children'] as List<dynamic>? ?? [];
+    final texts = <String>[];
+    for (final section in children) {
+      final nodes = section['children'] as List<dynamic>? ?? [];
+      for (final node in nodes) {
+        final text = node['text'] as String?;
+        if (text != null && text.isNotEmpty) {
+          texts.add(text);
+        }
+      }
+    }
+    return texts.join('\n\n');
   }
 
   Future<void> export() async {
