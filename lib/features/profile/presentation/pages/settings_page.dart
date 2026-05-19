@@ -77,7 +77,7 @@ class _SettingsPageState extends State<SettingsPage> {
               icon: Icons.info_outline,
               title: '关于',
               trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
-              onTap: () {},
+              onTap: () => context.push('/about'),
             ),
           ]),
         ],

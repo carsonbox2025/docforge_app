@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +9,9 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../auth/domain/providers/auth_provider.dart';
-import '../../../payment/domain/providers/payment_provider.dart';
+import '../../../payment/domain/providers/payment_provider.dart' as payment;
+import '../../../notification/domain/providers/notification_provider.dart';
+import '../../domain/providers/quota_provider.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -17,16 +21,33 @@ class ProfilePage extends ConsumerStatefulWidget {
 }
 
 class _ProfilePageState extends ConsumerState<ProfilePage> {
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (mounted) ref.invalidate(unreadCountProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final user = authState.user;
     final displayName = user?.username ?? user?.phone ?? '用户';
-    final quotaAsync = ref.watch(quotaProvider);
-    final isPro = quotaAsync.maybeWhen(
-      data: (quota) => quota.isPro,
-      orElse: () => false,
+    final quotaState = ref.watch(quotaProvider);
+    final isPro = ref.watch(payment.quotaProvider).maybeWhen(
+      data: (quota) => quota.isPro, orElse: () => false,
     );
+    final unreadAsync = ref.watch(unreadCountProvider);
+    final unreadCount = unreadAsync.maybeWhen(data: (c) => c, orElse: () => 0);
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -34,16 +55,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(displayName, isPro),
-            _buildStatsRow(),
-            _buildQuotaCard(),
+            _buildHeader(displayName, isPro, unreadCount),
+            _buildStatsRow(quotaState),
+            _buildQuotaCard(quotaState),
             _buildSubscriptionBanner(),
             _buildMenuSection('常用', [
               _MenuItem(
                 icon: Icons.history,
                 title: '历史文档',
-                badge: '128',
-                onTap: () => context.push('/history'),
+                onTap: () => context.push('/documents'),
               ),
               _MenuItem(
                 icon: Icons.drafts_outlined,
@@ -54,6 +74,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 icon: Icons.bookmark_outline,
                 title: '收藏模板',
                 onTap: () => context.push('/templates'),
+              ),
+              _MenuItem(
+                icon: Icons.feedback_outlined,
+                title: '问题反馈',
+                onTap: () => context.push('/feedback'),
               ),
             ]),
             const SizedBox(height: 8),
@@ -82,7 +107,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               _MenuItem(
                 icon: Icons.info_outline,
                 title: '关于${AppConstants.appName}',
-                onTap: () {},
+                onTap: () => context.push('/about'),
               ),
             ]),
             const SizedBox(height: 16),
@@ -96,7 +121,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
   // ─── Blue header with avatar ───────────────────────────────────────────────
 
-  Widget _buildHeader(String displayName, bool isPro) {
+  Widget _buildHeader(String displayName, bool isPro, int unreadCount) {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.primary,
@@ -191,7 +216,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 ),
                 // Notification button
                 GestureDetector(
-                  onTap: () => context.push('/notifications'),
+                  onTap: () {
+                    context.push('/notifications');
+                    Future.delayed(const Duration(milliseconds: 500), () {
+                      ref.invalidate(unreadCountProvider);
+                    });
+                  },
                   child: Container(
                     width: 36,
                     height: 36,
@@ -199,10 +229,44 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       color: Colors.white.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
-                    child: Icon(
-                      Icons.notifications_none,
-                      size: 18,
-                      color: Colors.white.withValues(alpha: 0.7),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Center(
+                          child: Icon(
+                            Icons.notifications_none,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        if (unreadCount > 0)
+                          Positioned(
+                            right: -4,
+                            top: -4,
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: unreadCount > 9 ? 4 : 5,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.error,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.white, width: 1.5),
+                              ),
+                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                              child: Center(
+                                child: Text(
+                                  unreadCount > 99 ? '99+' : '$unreadCount',
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -216,16 +280,46 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
   // ─── Stats row ─────────────────────────────────────────────────────────────
 
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(QuotaState quotaState) {
+    final stats = quotaState.stats;
+
+    if (quotaState.isLoading) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: Row(children: [
+          Expanded(child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted)))),
+          _buildStatDivider(),
+          Expanded(child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted)))),
+          _buildStatDivider(),
+          Expanded(child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted)))),
+        ]),
+      );
+    }
+
+    // 空态引导
+    final hasData = stats != null && (stats.generateCount > 0 || stats.polishCount > 0);
+    if (!hasData) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: Center(
+          child: GestureDetector(
+            onTap: () => context.go('/generate'),
+            child: Text('开始你的第一篇文档 →',
+              style: const TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: Row(
         children: [
-          _buildStatItem('128', '生成文档'),
+          _buildStatItem('${stats?.generateCount ?? 0}', '生成文档'),
           _buildStatDivider(),
-          _buildStatItem('46', '精修次数'),
+          _buildStatItem('${stats?.polishCount ?? 0}', '精修次数'),
           _buildStatDivider(),
-          _buildStatItem('32k', 'Token'),
+          _buildStatItem(stats?.wordCountDisplay ?? '0', '字数'),
         ],
       ),
     );
@@ -263,7 +357,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
   // ─── Quota card (floating) ─────────────────────────────────────────────────
 
-  Widget _buildQuotaCard() {
+  Widget _buildQuotaCard(QuotaState quotaState) {
+    final stats = quotaState.stats;
+
     return Transform.translate(
       offset: const Offset(0, -14),
       child: Container(
@@ -280,13 +376,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ),
           ],
         ),
-        child: Row(
-          children: [
-            _buildQuotaItem('86', '剩余配额', AppColors.success, AppColors.successBg),
-            _buildQuotaItem('12', '模板收藏', AppColors.primary, AppColors.primaryBg),
-            _buildQuotaItem('5', '术语表', AppColors.cta, AppColors.ctaBg),
-          ],
-        ),
+        child: quotaState.isLoading
+            ? Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted)))
+            : Row(
+                children: [
+                  _buildQuotaItem('${stats?.remainingQuota ?? 0}', '剩余配额', AppColors.success, AppColors.successBg),
+                  _buildQuotaItem('—', '模板收藏', AppColors.primary, AppColors.primaryBg),
+                  _buildQuotaItem('—', '术语表', AppColors.cta, AppColors.ctaBg),
+                ],
+              ),
       ),
     );
   }

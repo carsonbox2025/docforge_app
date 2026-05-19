@@ -7,6 +7,12 @@ class AppConstants {
   static const String appName = '稿搭子';
   static const String appSlogan = '智能文档工坊';
   static const String appKey = 'docforge';
+  static const String appVersion = '1.0.0';
+
+  // 联系方式
+  static const String officialWebsite = 'https://docforge.app';
+  static const String supportEmail = 'support@docforge.app';
+  static const String wechatAccount = 'DocForge_AI';
 
   // 通过 --dart-define=API_HOST=xxx 覆盖，否则按平台自动推断
   static const String _envHost = String.fromEnvironment('API_HOST');
@@ -44,9 +50,8 @@ class AppConstants {
   static const String userIdKey = 'user_id';
   static const String themeKey = 'app_theme';
 
-  // Legal URLs
-  static const String termsUrl = 'https://docforge.app/terms';
-  static const String privacyUrl = 'https://docforge.app/privacy';
+  // Legal API (relative paths for Dio baseUrl)
+  static String legalUrl(String type) => '/legal/$type';
 
   // Doc types
   static const List<String> docTypes = [
@@ -76,4 +81,18 @@ class AppConstants {
   static String orderRefundUrl(String orderNo) =>
       '$apiBasePath/payment/orders/$orderNo/refund';
   static String get quotasMeUrl => '$apiBasePath/payment/quotas/me';
+
+  // Quota APIs (relative paths for Dio baseUrl)
+  static const String quotaUsageUrl = '/quota/usage';
+  static const String quotaStatsUrl = '/quota/stats';
+
+  // Notification APIs (relative paths for Dio baseUrl)
+  static const String notificationsListUrl = '/notifications/list';
+  static const String notificationsUnreadCountUrl = '/notifications/unread-count';
+  static const String notificationsReadAllUrl = '/notifications/read-all';
+  static String notificationReadUrl(int id) => '/notifications/$id/read';
+
+  // Feedback APIs
+  static const String feedbackSubmitUrl = '/feedbacks';
+  static const String feedbackListUrl = '/feedbacks/list';
 }

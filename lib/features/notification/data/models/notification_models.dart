@@ -78,4 +78,56 @@ class NotificationItem {
       group: group,
     );
   }
+
+  factory NotificationItem.fromApi(Map<String, dynamic> json) {
+    return NotificationItem(
+      id: json['id'] as int,
+      type: _parseType(json['type'] as String),
+      title: json['title'] as String,
+      description: json['description'] as String? ?? '',
+      time: _formatTime(json['created_at'] as String?),
+      isRead: json['is_read'] as bool? ?? false,
+      actionLabel: json['action_label'] as String?,
+      actionRoute: json['action_route'] as String?,
+      group: _inferGroup(json['created_at'] as String?),
+    );
+  }
+
+  static NotificationType _parseType(String code) {
+    return NotificationType.values.firstWhere(
+      (t) => t.code == code,
+      orElse: () => NotificationType.system,
+    );
+  }
+
+  static String _formatTime(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(iso);
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inMinutes < 1) return '刚刚';
+      if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
+      if (diff.inHours < 24) return '${diff.inHours} 小时前';
+      if (diff.inDays < 2) return '昨天';
+      return '${dt.month}月${dt.day}日';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  static NotificationGroup _inferGroup(String? iso) {
+    if (iso == null) return NotificationGroup.earlier;
+    try {
+      final dt = DateTime.parse(iso);
+      final now = DateTime.now();
+      if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+        return NotificationGroup.today;
+      }
+      if (now.difference(dt).inDays == 1) return NotificationGroup.yesterday;
+      return NotificationGroup.earlier;
+    } catch (_) {
+      return NotificationGroup.earlier;
+    }
+  }
 }

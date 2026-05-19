@@ -21,6 +21,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _passwordController = TextEditingController();
   int _countdown = 0;
   Timer? _timer;
+  bool _agreedToTerms = false;
 
   @override
   void dispose() {
@@ -151,13 +152,48 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                 obscureText: true,
                 decoration: const InputDecoration(hintText: '设置登录密码（可选）'),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+
+              // 隐私协议
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 18, height: 18,
+                    child: Checkbox(
+                      value: _agreedToTerms,
+                      onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
+                      activeColor: AppColors.primary,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Wrap(
+                      children: [
+                        Text('我已阅读并同意', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        GestureDetector(
+                          onTap: () => context.push('/legal/terms'),
+                          child: Text('《用户协议》', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                        ),
+                        Text('和', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        GestureDetector(
+                          onTap: () => context.push('/legal/privacy'),
+                          child: Text('《隐私协议》', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
 
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: authState.isLoading ? null : _register,
+                  onPressed: (authState.isLoading || !_agreedToTerms) ? null : _register,
                   child: authState.isLoading
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : const Text('注 册'),

@@ -3,26 +3,32 @@ import '../../data/quota_data_source.dart';
 
 class QuotaState {
   final QuotaUsage? data;
+  final UserStats? stats;
   final bool isLoading;
   final String? error;
 
   const QuotaState({
     this.data,
+    this.stats,
     this.isLoading = false,
     this.error,
   });
 
   QuotaState copyWith({
     QuotaUsage? data,
+    UserStats? stats,
     bool? isLoading,
     String? error,
   }) {
     return QuotaState(
       data: data ?? this.data,
+      stats: stats ?? this.stats,
       isLoading: isLoading ?? this.isLoading,
       error: error,
     );
   }
+
+  bool get isPro => data != null;
 }
 
 class QuotaNotifier extends StateNotifier<QuotaState> {
@@ -36,8 +42,9 @@ class QuotaNotifier extends StateNotifier<QuotaState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final usage = await _dataSource.getQuotaUsage();
+      final stats = await _dataSource.getStats();
       if (!mounted) return;
-      state = state.copyWith(data: usage, isLoading: false);
+      state = state.copyWith(data: usage, stats: stats, isLoading: false);
     } catch (e) {
       if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());

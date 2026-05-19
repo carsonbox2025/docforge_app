@@ -22,4 +22,26 @@ class SecureStorage {
       _storage.write(key: AppConstants.userIdKey, value: id);
 
   Future<void> clearAll() => _storage.deleteAll();
+
+  // ─── 记住密码凭据 ───
+
+  static const _savedIdKey = 'saved_identifier';
+  static const _savedPwdKey = 'saved_password';
+
+  Future<void> saveCredentials(String identifier, String password) async {
+    await _storage.write(key: _savedIdKey, value: identifier);
+    await _storage.write(key: _savedPwdKey, value: password);
+  }
+
+  Future<(String?, String?)> getSavedCredentials() async {
+    return (
+      await _storage.read(key: _savedIdKey),
+      await _storage.read(key: _savedPwdKey),
+    );
+  }
+
+  Future<void> clearCredentials() async {
+    await _storage.delete(key: _savedIdKey);
+    await _storage.delete(key: _savedPwdKey);
+  }
 }

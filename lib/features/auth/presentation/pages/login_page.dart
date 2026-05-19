@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../domain/providers/auth_provider.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../../../core/storage/secure_storage.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -23,6 +24,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _codeFocus = FocusNode();
   int _countdown = 0;
   Timer? _timer;
+  bool _rememberMe = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final (identifier, password) = await SecureStorage.instance.getSavedCredentials();
+    if (identifier != null && password != null) {
+      _identifierController.text = identifier;
+      _passwordController.text = password;
+      if (mounted) setState(() => _rememberMe = true);
+    }
+  }
 
   @override
   void dispose() {
@@ -74,12 +91,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
+  Future<void> _persistCredentials() async {
+    if (_rememberMe && !_showSmsLogin) {
+      final id = _identifierController.text.trim();
+      final pwd = _passwordController.text;
+      if (id.isNotEmpty && pwd.isNotEmpty) {
+        await SecureStorage.instance.saveCredentials(id, pwd);
+      }
+    } else {
+      await SecureStorage.instance.clearCredentials();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(authProvider).isLoading;
 
     ref.listen<AuthState>(authProvider, (prev, next) {
       if (next.status == AuthStatus.authenticated) {
+        _persistCredentials();
         context.go('/');
       } else if (next.status == AuthStatus.error && next.errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -163,6 +193,29 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               decoration: const InputDecoration(hintText: '请输入密码'),
             ),
           ],
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 18, height: 18,
+                child: Checkbox(
+                  value: _rememberMe,
+                  onChanged: (v) => setState(() => _rememberMe = v ?? false),
+                  activeColor: AppColors.primary,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => setState(() => _rememberMe = !_rememberMe),
+                child: Text('记住密码',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 24),
         SizedBox(

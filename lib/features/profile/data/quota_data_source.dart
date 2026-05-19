@@ -5,11 +5,21 @@ class QuotaDataSource {
   /// 获取用量统计
   Future<QuotaUsage> getQuotaUsage() async {
     final response = await ApiClient.instance.get(
-      '${AppConstants.apiBaseUrl}/quota/usage',
+      AppConstants.quotaUsageUrl,
     );
     final data = response.data['data'] as Map<String, dynamic>?;
     if (data == null) throw Exception('配额数据为空');
     return QuotaUsage.fromJson(data);
+  }
+
+  /// 获取用户综合统计
+  Future<UserStats> getStats() async {
+    final response = await ApiClient.instance.get(
+      AppConstants.quotaStatsUrl,
+    );
+    final data = response.data['data'] as Map<String, dynamic>?;
+    if (data == null) throw Exception('统计数据为空');
+    return UserStats.fromJson(data);
   }
 }
 
@@ -51,4 +61,34 @@ class QuotaItem {
       period: json['period'] as String? ?? 'month',
     );
   }
+}
+
+class UserStats {
+  final int generateCount;
+  final int polishCount;
+  final int translateCount;
+  final int totalWordCount;
+  final String wordCountDisplay;
+  final int remainingQuota;
+  final int totalQuota;
+
+  const UserStats({
+    required this.generateCount,
+    required this.polishCount,
+    required this.translateCount,
+    required this.totalWordCount,
+    required this.wordCountDisplay,
+    required this.remainingQuota,
+    required this.totalQuota,
+  });
+
+  factory UserStats.fromJson(Map<String, dynamic> json) => UserStats(
+    generateCount: json['generate_count'] as int? ?? 0,
+    polishCount: json['polish_count'] as int? ?? 0,
+    translateCount: json['translate_count'] as int? ?? 0,
+    totalWordCount: json['total_word_count'] as int? ?? 0,
+    wordCountDisplay: json['word_count_display'] as String? ?? '0',
+    remainingQuota: json['remaining_quota'] as int? ?? 0,
+    totalQuota: json['total_quota'] as int? ?? -1,
+  );
 }

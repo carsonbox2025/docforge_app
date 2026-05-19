@@ -21,7 +21,10 @@ import '../features/glossary/presentation/pages/glossary_page.dart';
 import '../features/search/presentation/pages/search_page.dart';
 import '../features/profile/presentation/pages/settings_page.dart';
 import '../features/profile/presentation/pages/usage_page.dart';
+import '../features/profile/presentation/pages/about_page.dart';
 import '../features/draft/presentation/pages/drafts_page.dart';
+import '../features/auth/presentation/pages/legal_page.dart';
+import '../features/feedback/presentation/pages/feedback_page.dart';
 import 'shell.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -76,6 +79,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/splash', builder: (_, _) => const SplashPage()),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),
+      GoRoute(
+        path: '/legal/:type',
+        pageBuilder: (_, state) {
+          final type = state.pathParameters['type'] ?? 'terms';
+          return _fastFadePage(LegalPage(type: type), ValueKey('legal-$type'));
+        },
+      ),
 
       ShellRoute(
         builder: (_, _, child) => AppShell(child: child),
@@ -121,6 +131,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/settings', pageBuilder: (_, _) => _fastFadePage(const SettingsPage(), const ValueKey('settings'))),
       GoRoute(path: '/usage', pageBuilder: (_, _) => _fastFadePage(const UsagePage(), const ValueKey('usage'))),
       GoRoute(path: '/drafts', pageBuilder: (_, _) => _fastFadePage(const DraftsPage(), const ValueKey('drafts'))),
+      GoRoute(path: '/about', pageBuilder: (_, _) => _fastFadePage(const AboutPage(), const ValueKey('about'))),
+      GoRoute(path: '/feedback', pageBuilder: (_, _) => _fastFadePage(const FeedbackPage(), const ValueKey('feedback'))),
     ],
   );
 });

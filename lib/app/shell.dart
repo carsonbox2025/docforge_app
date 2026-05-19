@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/constants/app_colors.dart';
+import '../features/notification/domain/providers/notification_provider.dart';
 
 class AppShell extends StatelessWidget {
   final Widget child;
@@ -12,12 +14,15 @@ class AppShell extends StatelessWidget {
   }
 }
 
-class AppNavigationShell extends StatelessWidget {
+class AppNavigationShell extends ConsumerWidget {
   final StatefulNavigationShell navigationShell;
   const AppNavigationShell({super.key, required this.navigationShell});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unreadAsync = ref.watch(unreadCountProvider);
+    final unreadCount = unreadAsync.maybeWhen(data: (c) => c, orElse: () => 0);
+
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: Container(
@@ -44,7 +49,7 @@ class AppNavigationShell extends StatelessWidget {
             _centerNavItem(),
             _navItem(Icons.auto_fix_high_outlined, Icons.auto_fix_high, '精修'),
             _navItem(Icons.translate_outlined, Icons.translate, '翻译'),
-            _navItem(Icons.person_outline, Icons.person, '我的'),
+            _profileNavItem(unreadCount),
           ],
         ),
       ),
@@ -56,6 +61,23 @@ class AppNavigationShell extends StatelessWidget {
       icon: Icon(icon, size: 22),
       activeIcon: Icon(activeIcon, size: 22),
       label: label,
+    );
+  }
+
+  BottomNavigationBarItem _profileNavItem(int unreadCount) {
+    final badge = unreadCount > 99 ? '99+' : '$unreadCount';
+    return BottomNavigationBarItem(
+      icon: Badge(
+        isLabelVisible: unreadCount > 0,
+        label: Text(badge, style: const TextStyle(fontSize: 9)),
+        child: const Icon(Icons.person_outline, size: 22),
+      ),
+      activeIcon: Badge(
+        isLabelVisible: unreadCount > 0,
+        label: Text(badge, style: const TextStyle(fontSize: 9)),
+        child: const Icon(Icons.person, size: 22),
+      ),
+      label: '我的',
     );
   }
 

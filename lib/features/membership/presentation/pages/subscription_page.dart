@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -455,26 +454,14 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
             children: [
               Text('购买即表示同意', style: TextStyle(fontSize: 11, color: AppColors.textMuted.withValues(alpha: 0.7))),
               GestureDetector(
-                onTap: () {
-                  const url = AppConstants.termsUrl;
-                  if (url.isNotEmpty) {
-                    final uri = Uri.parse(url);
-                    if (uri.scheme == 'https') launchUrl(uri);
-                  }
-                },
+                onTap: () => context.push('/legal/terms'),
                 child: const Text('《用户协议》', style: TextStyle(
                   fontSize: 11, color: AppColors.primary, decoration: TextDecoration.underline,
                 )),
               ),
               Text(' 和 ', style: TextStyle(fontSize: 11, color: AppColors.textMuted.withValues(alpha: 0.7))),
               GestureDetector(
-                onTap: () {
-                  const url = AppConstants.privacyUrl;
-                  if (url.isNotEmpty) {
-                    final uri = Uri.parse(url);
-                    if (uri.scheme == 'https') launchUrl(uri);
-                  }
-                },
+                onTap: () => context.push('/legal/privacy'),
                 child: const Text('《隐私政策》', style: TextStyle(
                   fontSize: 11, color: AppColors.primary, decoration: TextDecoration.underline,
                 )),
