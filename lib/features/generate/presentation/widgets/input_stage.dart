@@ -398,6 +398,7 @@ class _InputStageState extends ConsumerState<InputStage> {
     SceneConfig? scene,
     GenerateNotifier notifier,
   ) async {
+    notifier.updateFormFields({..._fieldValues});
     if (scene != null && !scene.pricing.isFree) {
       try {
         final quota = await ref.read(quotaProvider.future);
@@ -406,7 +407,10 @@ class _InputStageState extends ConsumerState<InputStage> {
             PayWall.show(
               context,
               scene: scene,
-              onPaid: () => notifier.startGenerate(),
+              onPaid: () {
+                notifier.updateFormFields({..._fieldValues});
+                notifier.startGenerate();
+              },
             );
           }
           return;

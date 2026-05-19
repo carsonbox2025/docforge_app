@@ -19,6 +19,7 @@ class GenerateDataSource {
     return _taskDs.submitTask(
       taskType: TaskType.generate,
       userInput: {
+        if (request.formFields != null) ...request.formFields!,
         'content': request.content,
         'language': request.language.code,
         'mode': request.mode,
