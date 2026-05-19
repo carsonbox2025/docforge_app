@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../scene/data/models/scene_models.dart';
+import 'package:intl/intl.dart';
 
 /// Layer 2 封面字段表单 — 论文/技术方案的元数据输入
 class CoverFieldsForm extends StatelessWidget {
@@ -58,6 +59,7 @@ class CoverFieldsForm extends StatelessWidget {
                   required: region.required,
                   value: fieldValues[region.regionId] ?? '',
                   onChanged: (v) => onChanged(region.regionId, v),
+                  isDate: region.regionId == 'date' || region.regionId.endsWith('_date'),
                 ),
               );
             }).toList(),
@@ -96,12 +98,14 @@ class _CoverField extends StatefulWidget {
   final bool required;
   final String value;
   final ValueChanged<String> onChanged;
+  final bool isDate;
 
   const _CoverField({
     required this.label,
     required this.required,
     required this.value,
     required this.onChanged,
+    this.isDate = false,
   });
 
   @override
@@ -133,6 +137,28 @@ class _CoverFieldState extends State<_CoverField> {
     super.dispose();
   }
 
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final initial = _parseDate(widget.value) ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year + 5),
+      locale: const Locale('zh', 'CN'),
+    );
+    if (picked != null) {
+      final formatted = DateFormat('yyyy-MM-dd').format(picked);
+      _controller.text = formatted;
+      widget.onChanged(formatted);
+    }
+  }
+
+  DateTime? _parseDate(String text) {
+    if (text.isEmpty) return null;
+    return DateTime.tryParse(text);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -151,6 +177,8 @@ class _CoverFieldState extends State<_CoverField> {
           child: TextField(
             controller: _controller,
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            readOnly: widget.isDate,
+            onTap: widget.isDate ? _pickDate : null,
             decoration: InputDecoration(
               filled: true,
               fillColor: AppColors.surface,
@@ -168,6 +196,11 @@ class _CoverFieldState extends State<_CoverField> {
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               isDense: true,
+              suffixIcon: widget.isDate
+                  ? const Icon(Icons.calendar_today, size: 16, color: AppColors.textMuted)
+                  : null,
+              hintText: widget.isDate ? '点击选择日期' : null,
+              hintStyle: const TextStyle(fontSize: 13, color: AppColors.textMuted),
             ),
             onChanged: widget.onChanged,
           ),

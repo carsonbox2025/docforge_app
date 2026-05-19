@@ -158,6 +158,8 @@ class TaskDataSource {
       },
     ));
     try {
+      _log('[TaskDataSource] SSE connecting: /document/$taskId/stream, '
+          'baseUrl=${dio.options.baseUrl}');
       final response = await dio.get<ResponseBody>(
         '/document/$taskId/stream',
         options: Options(
@@ -167,6 +169,9 @@ class TaskDataSource {
         ),
         cancelToken: cancelToken,
       );
+
+      _log('[TaskDataSource] SSE connected: statusCode=${response.statusCode}, '
+          'contentType=${response.headers.value('content-type')}');
 
       final stream = response.data!.stream;
       String buffer = '';
@@ -199,6 +204,13 @@ class TaskDataSource {
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) return;
+      _log('[TaskDataSource] progressStream DioException: docId=$taskId, '
+          'type=${e.type}, status=${e.response?.statusCode}, '
+          'message=${e.message}');
+    } catch (e, st) {
+      _log('[TaskDataSource] progressStream unexpected error: docId=$taskId, '
+          'error=$e');
+      _log('$st');
     }
   }
 

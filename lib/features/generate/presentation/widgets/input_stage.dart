@@ -529,6 +529,23 @@ class _InputStageState extends ConsumerState<InputStage> {
     notifier.selectScene(scene);
     _fieldValues.clear();
     _coverValues.clear();
+    _applyFieldDefaults(scene);
+  }
+
+  void _applyFieldDefaults(SceneConfig scene) {
+    final now = DateTime.now();
+    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    for (final field in scene.formFields) {
+      if (field.type == 'date' && !_fieldValues.containsKey(field.name)) {
+        _fieldValues[field.name] = dateStr;
+      }
+    }
+    for (final region in scene.coverFieldRegions) {
+      final rid = region.regionId;
+      if ((rid == 'date' || rid.endsWith('_date')) && !_coverValues.containsKey(rid)) {
+        _coverValues[rid] = dateStr;
+      }
+    }
   }
 
   /// 从场景配置动态提取 Layer 2 封面字段
