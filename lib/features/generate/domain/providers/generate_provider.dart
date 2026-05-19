@@ -15,6 +15,25 @@ void _log(String message) {
 
 enum GenerationStatus { idle, planning, generating, complete, error }
 
+/// Layer 2 规划阶段定义
+class PlanningPhaseDef {
+  final String key;
+  final String label;
+  final String description;
+  const PlanningPhaseDef({
+    required this.key,
+    required this.label,
+    required this.description,
+  });
+}
+
+const kPlanningPhases = [
+  PlanningPhaseDef(key: 'analyzing', label: '分析中', description: '正在分析您的需求...'),
+  PlanningPhaseDef(key: 'structuring', label: '结构规划', description: '正在规划文档结构...'),
+  PlanningPhaseDef(key: 'detailing', label: '细节填充', description: '正在完善章节细节...'),
+  PlanningPhaseDef(key: 'optimizing', label: '优化完善', description: '正在优化文档方案...'),
+];
+
 final generateProvider =
     StateNotifierProvider.autoDispose<GenerateNotifier, GenerateState>((ref) {
   return GenerateNotifier(GenerateDataSource());
@@ -63,6 +82,8 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       outline: [],
       dslNodes: {},
       streamingBlocks: {},
+      planningThoughts: [],
+      planningPhase: 'analyzing',
       documentId: null,
       resultData: null,
       progress: 0,
@@ -99,14 +120,17 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     _log('[Generate] startGenerate: sceneId=${scene.sceneId}, docType=${scene.docType}, '
         'layer=${scene.layer}, templateId=${scene.templateId}, mode=${state.mode}');
 
+    final isLayer2 = scene.isLayer2;
     state = state.copyWith(
       stage: GenerateStage.generating,
-      status: GenerationStatus.planning,
+      status: isLayer2 ? GenerationStatus.planning : GenerationStatus.generating,
       progress: 0,
       docTitle: '',
       outline: [],
       dslNodes: {},
       streamingBlocks: {},
+      planningThoughts: [],
+      planningPhase: 'analyzing',
       documentId: null,
       resultData: null,
       clearError: true,
@@ -133,7 +157,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       _log('[Generate] task submitted successfully, taskId=$taskId');
 
       state = state.copyWith(
-        status: GenerationStatus.generating,
+        status: isLayer2 ? state.status : GenerationStatus.generating,
         progressMsg: '任务已提交',
       );
 
@@ -156,26 +180,40 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       (update) {
         if (_disposed || !mounted) return;
 
+        final detailKeys = update.detail?.keys.toList() ?? <String>[];
         _log('[Generate] progress update: taskId=$taskId, progress=${update.progress}, '
-            'message=${update.message}');
+            'message=${update.message}, detailKeys=$detailKeys');
 
-        // 解析 DSL 更新
+        // 解析 DSL 更新（try-catch 防止类型转换异常阻断整个回调）
         final detail = update.detail;
         if (detail != null) {
-          _handleDslUpdate(detail);
+          try {
+            _handleDslUpdate(detail);
+          } catch (e, st) {
+            _log('[Generate] _handleDslUpdate ERROR: $e\n$st');
+          }
         }
 
-        // 更新进度
+        // 状态流转：继承当前状态（planning 不被覆盖），仅在终态时强制覆盖
         final progressPct = update.progress.clamp(0.0, 1.0);
-        final status = progressPct < 1.0
-            ? GenerationStatus.generating
-            : GenerationStatus.complete;
+        GenerationStatus nextStatus = state.status;
+        if (progressPct >= 1.0) {
+          nextStatus = GenerationStatus.complete;
+        } else if (state.status == GenerationStatus.idle) {
+          nextStatus = GenerationStatus.generating;
+        }
 
         state = state.copyWith(
           progress: progressPct,
           progressMsg: update.message,
-          status: status,
+          status: nextStatus,
         );
+
+        _log('[Generate] state after update: status=${state.status}, '
+            'thoughts=${state.planningThoughts.length}, '
+            'outline=${state.outline.length}, '
+            'dslNodes sections=${state.dslNodes.keys.toList()}, '
+            'hasNodes=${state.dslNodes.values.any((l) => l.isNotEmpty)}');
       },
       onDone: () {
         if (_disposed || !mounted) return;
@@ -191,11 +229,32 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
   }
 
   void _handleDslUpdate(Map<String, dynamic> detail) {
+    // 1. 处理 planning_event（Layer 2 规划阶段）
+    final planningEvent = detail['planning_event'] as Map<String, dynamic>?;
+    if (planningEvent != null) {
+      _log('[Generate] → planning_event: phase=${planningEvent['phase']}, '
+          'contentLen=${(planningEvent['content'] as String?)?.length ?? 0}');
+      _handlePlanningEvent(planningEvent);
+      return;
+    }
+
     final dslUpdate = detail['dsl_update'] as Map<String, dynamic>?;
     if (dslUpdate == null) {
+      _log('[Generate] → legacy detail: keys=${detail.keys.toList()}');
       // 兼容旧格式
       _handleLegacyProgressDetail(detail);
       return;
+    }
+
+    _log('[Generate] → dsl_update: outline=${(dslUpdate['outline'] as List?)?.length ?? 0}, '
+        'nodeUpdates=${(dslUpdate['node_updates'] as List?)?.length ?? 0}');
+
+    // 2. 收到第一个 dsl_update → 规划完成，进入正式生成
+    if (state.status == GenerationStatus.planning) {
+      state = state.copyWith(
+        status: GenerationStatus.generating,
+        planningPhase: 'complete',
+      );
     }
 
     // 更新 outline
@@ -251,6 +310,26 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
 
       state = state.copyWith(dslNodes: nodes);
     }
+  }
+
+  void _handlePlanningEvent(Map<String, dynamic> event) {
+    final content = event['content'] as String? ?? '';
+    final phase = event['phase'] as String? ?? 'analyzing';
+
+    final thoughts = List<String>.from(state.planningThoughts);
+    if (content.contains('\n') || thoughts.isEmpty) {
+      thoughts.add(content.replaceFirst(RegExp(r'^\n+'), ''));
+    } else {
+      thoughts[thoughts.length - 1] = thoughts.last + content;
+    }
+
+    _log('[Generate] planning thought: phase=$phase, len=${thoughts.join('').length}');
+
+    state = state.copyWith(
+      planningThoughts: thoughts,
+      planningPhase: phase,
+      status: GenerationStatus.planning,
+    );
   }
 
   void _handleLegacyProgressDetail(Map<String, dynamic> detail) {
@@ -518,6 +597,10 @@ class GenerateState {
   // 兼容旧格式
   final Map<String, dynamic> streamingBlocks;
 
+  // Layer 2 规划阶段
+  final List<String> planningThoughts;
+  final String planningPhase;
+
   // 结果
   final int? documentId;
   final Map<String, dynamic>? resultData;
@@ -541,6 +624,8 @@ class GenerateState {
     this.outline = const [],
     this.dslNodes = const {},
     this.streamingBlocks = const {},
+    this.planningThoughts = const [],
+    this.planningPhase = 'analyzing',
     this.documentId,
     this.resultData,
     this.error,
@@ -564,6 +649,8 @@ class GenerateState {
     List<DslOutline>? outline,
     Map<String, List<DslNode>>? dslNodes,
     Map<String, dynamic>? streamingBlocks,
+    List<String>? planningThoughts,
+    String? planningPhase,
     Object? documentId = _sentinel,
     Object? resultData = _sentinel,
     String? error,
@@ -586,6 +673,8 @@ class GenerateState {
         outline: outline ?? this.outline,
         dslNodes: dslNodes ?? this.dslNodes,
         streamingBlocks: streamingBlocks ?? this.streamingBlocks,
+        planningThoughts: planningThoughts ?? this.planningThoughts,
+        planningPhase: planningPhase ?? this.planningPhase,
         documentId: documentId == _sentinel ? this.documentId : documentId as int?,
         resultData: resultData == _sentinel ? this.resultData : resultData as Map<String, dynamic>?,
         error: clearError ? null : (error ?? this.error),

@@ -190,13 +190,21 @@ class TaskDataSource {
               final json = jsonDecode(payload) as Map<String, dynamic>;
               final progress = (json['progress'] as num?)?.toDouble() ?? 0;
               if (progress < 0) continue;
+              final detailRaw = json['detail'];
+              final detail = detailRaw is Map<String, dynamic> ? detailRaw : null;
+              if (detail == null && detailRaw != null) {
+                _log('[TaskDataSource] SSE detail type mismatch: '
+                    'actualType=${detailRaw.runtimeType}, '
+                    'preview=${detailRaw.toString().substring(0, (detailRaw.toString().length > 100 ? 100 : detailRaw.toString().length))}');
+              }
               yield TaskProgress(
                 progress: progress,
                 message: json['message'] as String? ?? '',
-                detail: json['detail'] as Map<String, dynamic>?,
+                detail: detail,
               );
               if (progress >= 1.0) return;
-            } catch (_) {
+            } catch (e) {
+              _log('[TaskDataSource] SSE parse error: $e');
               continue;
             }
           }

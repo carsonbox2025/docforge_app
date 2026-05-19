@@ -7,6 +7,8 @@ import '../../data/models/generate_models.dart';
 import '../../domain/providers/generate_provider.dart';
 import '../../../../shared/widgets/feature_header.dart';
 import '../../../../shared/widgets/review_report.dart';
+import '../../../../shared/widgets/dsl/dsl_renderer.dart';
+import '../../../../shared/models/dsl/dsl_node.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ReviewStage extends ConsumerStatefulWidget {
@@ -44,7 +46,6 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
     final token = await SecureStorage.instance.getToken();
     _isLoading = true;
 
-    // 将 token 附加到 URL 参数而非 Header，避免重定向时泄漏
     Uri previewUri = Uri.parse(url);
     if (token != null) {
       previewUri = previewUri.replace(queryParameters: {
@@ -55,25 +56,31 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
 
     final allowedHost = previewUri.host;
 
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.disabled)
-      ..setNavigationDelegate(NavigationDelegate(
-        onNavigationRequest: (request) {
-          final reqHost = Uri.parse(request.url).host;
-          if (reqHost != allowedHost && reqHost.isNotEmpty) {
-            return NavigationDecision.prevent;
-          }
-          return NavigationDecision.navigate;
-        },
-        onPageFinished: (_) {
-          if (mounted) setState(() => _isLoading = false);
-        },
-        onWebResourceError: (e) {
-          if (mounted) setState(() => _isLoading = false);
-        },
-      ))
-      ..loadRequest(previewUri);
-    if (mounted) setState(() {});
+    try {
+      _webViewController = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.disabled)
+        ..setNavigationDelegate(NavigationDelegate(
+          onNavigationRequest: (request) {
+            final reqHost = Uri.parse(request.url).host;
+            if (reqHost != allowedHost && reqHost.isNotEmpty) {
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+          onPageFinished: (_) {
+            if (mounted) setState(() => _isLoading = false);
+          },
+          onWebResourceError: (e) {
+            if (mounted) setState(() => _isLoading = false);
+          },
+        ))
+        ..loadRequest(previewUri);
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('[ReviewStage] WebView init failed (platform unsupported): $e');
+      _webViewController = null;
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -255,6 +262,51 @@ class _ReviewStageState extends ConsumerState<ReviewStage> {
   }
 
   Widget _buildFallbackPreview(GenerateState state) {
+    // 尝试从 dslNodes 渲染内容
+    final nodes = state.dslNodes;
+    final hasNodes = nodes.isNotEmpty && nodes.values.any((l) => l.isNotEmpty);
+
+    if (hasNodes) {
+      final allNodes = <DslNode>[];
+      for (final section in state.outline) {
+        final sectionNodes = nodes[section.id] ?? [];
+        if (sectionNodes.isNotEmpty) {
+          allNodes.addAll(sectionNodes);
+        }
+      }
+      // 如果没有 outline 匹配，取 main 或第一个 section
+      if (allNodes.isEmpty) {
+        final mainNodes = nodes['main'] ?? nodes.values.first;
+        allNodes.addAll(mainNodes);
+      }
+
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DslRenderer(nodes: allNodes),
+              const SizedBox(height: 16),
+              Center(
+                child: Text(
+                  '以上为预览内容，导出 Word 可查看完整排版效果',
+                  style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 无 DSL 数据时的兜底
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(

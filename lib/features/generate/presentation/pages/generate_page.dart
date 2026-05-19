@@ -15,12 +15,7 @@ class GeneratePage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: _buildStage(stage),
-      ),
+      body: _buildStage(stage),
     );
   }
 

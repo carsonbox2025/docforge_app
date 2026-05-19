@@ -4,7 +4,9 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../domain/providers/generate_provider.dart';
 import '../../../../shared/widgets/feature_header.dart';
 import '../../../../shared/widgets/dsl/dsl_renderer.dart';
+import '../../../../shared/models/dsl/dsl_node.dart';
 import '../../../../shared/utils/chapter_numbering.dart';
+import 'planning_stage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class GeneratingStage extends ConsumerStatefulWidget {
@@ -17,15 +19,24 @@ class GeneratingStage extends ConsumerStatefulWidget {
 class _GeneratingStageState extends ConsumerState<GeneratingStage> {
   final _scrollController = ScrollController();
   bool _userScrolledUp = false;
+  int _buildCount = 0;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    debugPrint('[GeneratingStage] initState');
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    debugPrint('[GeneratingStage] didChangeDependencies');
   }
 
   @override
   void dispose() {
+    debugPrint('[GeneratingStage] dispose');
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
@@ -55,9 +66,14 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
   Widget build(BuildContext context) {
     final state = ref.watch(generateProvider);
     final notifier = ref.read(generateProvider.notifier);
+    _buildCount++;
 
     ref.listen<GenerateState>(generateProvider, (prev, next) {
-      if (next.dslNodes != prev?.dslNodes) {
+      final prevHas = prev?.dslNodes.values.any((l) => l.isNotEmpty) ?? false;
+      final nextHas = next.dslNodes.values.any((l) => l.isNotEmpty);
+      debugPrint('[GeneratingStage] listen: hasNodes $prevHas → $nextHas, '
+          'keys=${next.dslNodes.keys.toList()}');
+      if (nextHas != prevHas) {
         _scrollToBottom();
       }
     });
@@ -65,6 +81,17 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
     final hasNodes = state.dslNodes.isNotEmpty &&
         state.dslNodes.values.any((list) => list.isNotEmpty);
     final isGenerating = state.status == GenerationStatus.generating;
+    final isPlanning = state.status == GenerationStatus.planning;
+
+    final nodeCounts = <String, int>{};
+    for (final e in state.dslNodes.entries) {
+      nodeCounts[e.key] = e.value.length;
+    }
+    debugPrint('[GeneratingStage] build #$_buildCount: status=${state.status}, '
+        'hasNodes=$hasNodes, isGenerating=$isGenerating, isPlanning=$isPlanning, '
+        'thoughts=${state.planningThoughts.length}, outline=${state.outline.length}, '
+        'nodeCounts=$nodeCounts, progress=${state.progress}, '
+        'progressMsg=${state.progressMsg}');
 
     final hasError = state.error != null;
 
@@ -77,7 +104,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
           showBackButton: true,
           onBack: () => notifier.backToInput(),
         ),
-        _buildSteps(isGenerating, notifier),
+        _buildSteps(isGenerating, isPlanning, notifier),
         if (hasError)
           Container(
             margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
@@ -100,9 +127,15 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
           ),
         if (!hasError)
           Expanded(
-            child: hasNodes
-                ? _buildDslLayout(state, isGenerating)
-                : _buildLegacyLayout(state, isGenerating),
+            child: state.status == GenerationStatus.planning
+                ? PlanningStage(
+                    thoughts: state.planningThoughts,
+                    phase: state.planningPhase,
+                    title: state.selectedScene?.name ?? '正在规划文档',
+                  )
+                : hasNodes
+                    ? _buildDslLayout(state, isGenerating)
+                    : _buildLegacyLayout(state, isGenerating),
           ),
         if (!hasError)
           _buildProgressBar(state),
@@ -114,15 +147,19 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
   // ─── DSL 布局（统一渲染器）───
 
   Widget _buildDslLayout(GenerateState state, bool isGenerating) {
+    final hasOutline = state.outline.isNotEmpty;
+    final isLayer1Style = !hasOutline ||
+        (state.outline.length == 1 && state.outline.first.id == 'main');
+    debugPrint('[GeneratingStage] _buildDslLayout: hasOutline=$hasOutline, isLayer1Style=$isLayer1Style');
     return Row(
       children: [
-        // 左侧大纲
-        SizedBox(
-          width: 120,
-          child: _buildOutlinePanel(state),
-        ),
-        Container(width: 1, color: AppColors.border),
-        // 右侧 DSL 渲染区
+        if (hasOutline && !isLayer1Style) ...[
+          SizedBox(
+            width: 120,
+            child: _buildOutlinePanel(state),
+          ),
+          Container(width: 1, color: AppColors.border),
+        ],
         Expanded(
           child: SingleChildScrollView(
             controller: _scrollController,
@@ -147,6 +184,10 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
     final outline = state.outline;
     final nodes = state.dslNodes;
 
+    debugPrint('[GeneratingStage] _buildDslContent: outline=${outline.length}, '
+        'nodeSections=${nodes.keys.toList()}, '
+        'totalNodes=${nodes.values.fold(0, (sum, l) => sum + l.length)}');
+
     if (outline.isEmpty && nodes.isEmpty) {
       return const Center(
         child: Padding(
@@ -163,6 +204,39 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
       );
     }
 
+    // Layer 1（无大纲 或 仅 main 大纲）：直接渲染 nodes["main"]
+    final isLayer1Style = outline.isEmpty ||
+        (outline.length == 1 && outline.first.id == 'main');
+    if (isLayer1Style) {
+      final mainNodes = nodes['main'] ?? [];
+      debugPrint('[GeneratingStage] Layer1 path: mainNodes=${mainNodes.length}');
+      if (mainNodes.isNotEmpty) {
+        try {
+          return DslRenderer(
+            nodes: mainNodes,
+            isStreaming: isGenerating,
+          );
+        } catch (e) {
+          debugPrint('[GeneratingStage] DslRenderer ERROR: $e');
+          return _buildTextFallback(mainNodes);
+        }
+      }
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _PulseDot(),
+              SizedBox(height: 12),
+              Text('AI 正在规划文档结构...', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Layer 2（有大纲）：按章节渲染
     final List<Widget> widgets = [];
     int mainChapterIdx = 0;
 
@@ -185,13 +259,18 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
             : Text('$chNum、$cleanTitle', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
       ));
 
-      // 章节内容 — 使用 DslRenderer
+      // 章节内容 — 使用 DslRenderer（带 try-catch 回退）
       final isLastSection = oi == outline.length - 1;
       if (sectionNodes.isNotEmpty) {
-        widgets.add(DslRenderer(
-          nodes: sectionNodes,
-          isStreaming: isLastSection && isGenerating,
-        ));
+        try {
+          widgets.add(DslRenderer(
+            nodes: sectionNodes,
+            isStreaming: isLastSection && isGenerating,
+          ));
+        } catch (e) {
+          debugPrint('[GeneratingStage] DslRenderer ERROR in section $chId: $e');
+          widgets.add(_buildTextFallback(sectionNodes));
+        }
       } else if (item.status == 'generating') {
         widgets.add(const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
@@ -301,7 +380,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
 
   // ─── 公共组件 ───
 
-  Widget _buildSteps(bool isGenerating, GenerateNotifier notifier) {
+  Widget _buildSteps(bool isGenerating, bool isPlanning, GenerateNotifier notifier) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
@@ -318,7 +397,7 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
               ],
             ),
           ),
-          if (isGenerating)
+          if (isGenerating || isPlanning)
             TextButton.icon(
               onPressed: () => _confirmCancel(notifier),
               icon: const Icon(Icons.stop_circle_outlined, size: 18, color: AppColors.textMuted),
@@ -484,4 +563,19 @@ class _CursorState extends State<_Cursor> with SingleTickerProviderStateMixin {
       child: Container(width: 2, height: 14, margin: const EdgeInsets.only(left: 2), color: AppColors.primary),
     );
   }
+}
+
+/// DslRenderer 出错时的纯文本回退渲染
+Widget _buildTextFallback(List<DslNode> nodes) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: nodes.map((node) {
+      final text = node.text ?? node.title ?? '';
+      if (text.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(text, style: const TextStyle(fontSize: 13, height: 1.8, color: AppColors.text)),
+      );
+    }).toList(),
+  );
 }
