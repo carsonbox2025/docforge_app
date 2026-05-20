@@ -499,7 +499,12 @@ class PolishNotifier extends StateNotifier<PolishState> {
       state = state.copyWith(isProcessing: false);
     } catch (e) {
       debugPrint('[Polish] export error: $e');
-      state = state.copyWith(isProcessing: false, errorMessage: '导出失败');
+      if (mounted) {
+        state = state.copyWith(
+          isProcessing: false,
+          errorMessage: '导出失败：$e',
+        );
+      }
     }
   }
 

@@ -501,14 +501,22 @@ class _ReviewSuggestionPanel extends ConsumerWidget {
       if (context.mounted) {
         scaffold.hideCurrentSnackBar();
         scaffold.showSnackBar(
-          const SnackBar(content: Text('导出成功'), backgroundColor: AppColors.success),
+          const SnackBar(
+            content: Text('文档已导出并打开'),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 2),
+          ),
         );
       }
     } catch (e) {
       if (context.mounted) {
         scaffold.hideCurrentSnackBar();
         scaffold.showSnackBar(
-          SnackBar(content: Text('导出失败: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('导出失败: $e'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     }
