@@ -28,6 +28,7 @@ class PolishState {
   final List<PolishSuggestion> suggestions;
   final String? filterCategory;
   final String? filterSeverity;
+  final String filterStatus; // 'all' | 'pending' | 'processed'
   final int currentSuggestionIndex;
 
   // 原始段落
@@ -65,6 +66,7 @@ class PolishState {
     this.suggestions = const [],
     this.filterCategory,
     this.filterSeverity,
+    this.filterStatus = 'pending',
     this.currentSuggestionIndex = -1,
     this.originalParagraphs = const [],
     this.taskId,
@@ -95,6 +97,7 @@ class PolishState {
     List<PolishSuggestion>? suggestions,
     String? filterCategory,
     String? filterSeverity,
+    String? filterStatus,
     int? currentSuggestionIndex,
     List<SourceParagraph>? originalParagraphs,
     int? taskId,
@@ -127,6 +130,7 @@ class PolishState {
       suggestions: newSuggestions,
       filterCategory: clearFilterCategory ? null : (filterCategory ?? this.filterCategory),
       filterSeverity: clearFilterSeverity ? null : (filterSeverity ?? this.filterSeverity),
+      filterStatus: filterStatus ?? this.filterStatus,
       currentSuggestionIndex: currentSuggestionIndex ?? this.currentSuggestionIndex,
       originalParagraphs: originalParagraphs ?? this.originalParagraphs,
       taskId: taskId ?? this.taskId,
@@ -143,6 +147,11 @@ class PolishState {
 
   List<PolishSuggestion> get filteredSuggestions {
     var list = suggestions;
+    if (filterStatus == 'pending') {
+      list = list.where((s) => s.status == 'pending').toList();
+    } else if (filterStatus == 'processed') {
+      list = list.where((s) => s.status != 'pending').toList();
+    }
     if (filterCategory != null) {
       list = list.where((s) => s.category == filterCategory).toList();
     }
@@ -195,6 +204,8 @@ class PolishNotifier extends StateNotifier<PolishState> {
       state = state.copyWith(filterCategory: category, clearFilterCategory: category == null);
   void setFilterSeverity(String? severity) =>
       state = state.copyWith(filterSeverity: severity, clearFilterSeverity: severity == null);
+  void setFilterStatus(String status) =>
+      state = state.copyWith(filterStatus: status);
   void setCurrentSuggestionIndex(int index) =>
       state = state.copyWith(currentSuggestionIndex: index);
 

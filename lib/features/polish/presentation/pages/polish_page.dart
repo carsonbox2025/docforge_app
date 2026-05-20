@@ -431,9 +431,7 @@ class _ReviewSuggestionPanel extends ConsumerWidget {
     final stats = ref.watch(polishProvider.select((s) => (
       s.totalSuggestions, s.acceptedCount, s.rejectedCount, s.pendingCount,
     )));
-    final filterState = ref.watch(polishProvider.select((s) => (
-      s.filterCategory, s.filterSeverity,
-    )));
+    final filterState = ref.watch(polishProvider.select((s) => s.filterStatus));
     final filtered = ref.watch(polishProvider.select((s) => s.filteredSuggestions));
     final actionState = ref.watch(polishProvider.select((s) => (
       s.canUndo, s.canRedo, s.sourceFileUrl != null,
@@ -449,10 +447,8 @@ class _ReviewSuggestionPanel extends ConsumerWidget {
           pending: stats.$4,
         ),
         _FilterBar(
-          filterCategory: filterState.$1,
-          filterSeverity: filterState.$2,
-          onCategoryChanged: (c) => notifier.setFilterCategory(c),
-          onSeverityChanged: (s) => notifier.setFilterSeverity(s),
+          filterStatus: filterState,
+          onStatusChanged: (s) => notifier.setFilterStatus(s),
         ),
         Expanded(
           child: filtered.isEmpty
@@ -1074,85 +1070,39 @@ class _StatChip extends StatelessWidget {
 }
 
 class _FilterBar extends StatelessWidget {
-  final String? filterCategory;
-  final String? filterSeverity;
-  final ValueChanged<String?> onCategoryChanged;
-  final ValueChanged<String?> onSeverityChanged;
+  final String filterStatus;
+  final ValueChanged<String> onStatusChanged;
 
   const _FilterBar({
-    this.filterCategory,
-    this.filterSeverity,
-    required this.onCategoryChanged,
-    required this.onSeverityChanged,
+    required this.filterStatus,
+    required this.onStatusChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final categories = ['grammar', 'style', 'terminology', 'logic', 'format'];
-    final categoryLabels = {
-      'grammar': '语法',
-      'style': '风格',
-      'terminology': '术语',
-      'logic': '逻辑',
-      'format': '格式',
-    };
-    final severities = ['error', 'warning', 'suggestion'];
-    final severityLabels = {
-      'error': '错误',
-      'warning': '警告',
-      'suggestion': '建议',
-    };
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          // 分类筛选
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: '全部',
-                  selected: filterCategory == null,
-                  onTap: () => onCategoryChanged(null),
-                ),
-                ...categories.map((c) => Padding(
-                  padding: const EdgeInsets.only(left: 6),
-                  child: _FilterChip(
-                    label: categoryLabels[c] ?? c,
-                    selected: filterCategory == c,
-                    onTap: () => onCategoryChanged(filterCategory == c ? null : c),
-                  ),
-                )),
-              ],
-            ),
+          _FilterChip(
+            label: '待处理',
+            selected: filterStatus == 'pending',
+            onTap: () => onStatusChanged('pending'),
           ),
-          const SizedBox(height: 4),
-          // 严重程度筛选
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: '全部',
-                  selected: filterSeverity == null,
-                  onTap: () => onSeverityChanged(null),
-                ),
-                ...severities.map((s) => Padding(
-                  padding: const EdgeInsets.only(left: 6),
-                  child: _FilterChip(
-                    label: severityLabels[s] ?? s,
-                    selected: filterSeverity == s,
-                    onTap: () => onSeverityChanged(filterSeverity == s ? null : s),
-                  ),
-                )),
-              ],
-            ),
+          const SizedBox(width: 6),
+          _FilterChip(
+            label: '已处理',
+            selected: filterStatus == 'processed',
+            onTap: () => onStatusChanged('processed'),
+          ),
+          const SizedBox(width: 6),
+          _FilterChip(
+            label: '全部',
+            selected: filterStatus == 'all',
+            onTap: () => onStatusChanged('all'),
           ),
         ],
       ),
@@ -1219,7 +1169,7 @@ class _SuggestionCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -1228,20 +1178,60 @@ class _SuggestionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 标签行
+            // 标签行：类型 + 严重程度 + 操作按钮
             Row(
               children: [
                 _CategoryIcon(category: suggestion.category),
                 const SizedBox(width: 6),
                 _SeverityBadge(severity: suggestion.severity),
                 const Spacer(),
+                if (isPending) ...[
+                  GestureDetector(
+                    onTap: onReject,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppColors.textMuted.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.close, size: 12, color: AppColors.textMuted),
+                          const SizedBox(width: 3),
+                          Text('拒绝', style: AppTypography.micro.copyWith(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: onAccept,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check, size: 12, color: AppColors.success),
+                          const SizedBox(width: 3),
+                          Text('采纳', style: AppTypography.micro.copyWith(color: AppColors.success, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 if (isAccepted)
                   const Icon(Icons.check_circle, size: 16, color: AppColors.success),
                 if (isRejected)
                   const Icon(Icons.cancel, size: 16, color: AppColors.textMuted),
               ],
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: 6),
 
             // 原文
             Text(
@@ -1253,7 +1243,7 @@ class _SuggestionCard extends StatelessWidget {
                 color: AppColors.text,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
 
             // 建议
             Text(
@@ -1262,37 +1252,15 @@ class _SuggestionCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: AppTypography.caption.copyWith(color: AppColors.success),
             ),
-            const SizedBox(height: 4),
 
             // 原因
-            if (suggestion.reason.isNotEmpty)
+            if (suggestion.reason.isNotEmpty) ...[
+              const SizedBox(height: 3),
               Text(
                 suggestion.reason,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.small.copyWith(color: AppColors.textMuted),
-              ),
-
-            // 操作按钮（仅 pending 时显示）
-            if (isPending) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _ActionButton(
-                    label: '拒绝',
-                    icon: Icons.close,
-                    color: AppColors.textMuted,
-                    onPressed: onReject,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  _ActionButton(
-                    label: '采纳',
-                    icon: Icons.check,
-                    color: AppColors.success,
-                    onPressed: onAccept,
-                  ),
-                ],
               ),
             ],
           ],
@@ -1339,41 +1307,6 @@ class _SeverityBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(label, style: AppTypography.micro.copyWith(color: color, fontWeight: FontWeight.w600)),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onPressed;
-  const _ActionButton({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 4),
-            Text(label, style: AppTypography.small.copyWith(color: color, fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
     );
   }
 }
