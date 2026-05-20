@@ -136,6 +136,48 @@ class DslNode {
     this.styleHint,
   });
 
+  /// 创建副本并替换指定字段（用于 update_text 的 O(1) 更新）
+  DslNode copyWith({
+    String? text,
+  }) {
+    return DslNode(
+      type: type,
+      level: level,
+      text: text ?? this.text,
+      bold: bold,
+      italic: italic,
+      style: style,
+      items: items,
+      headers: headers,
+      rows: rows,
+      merges: merges,
+      url: url,
+      caption: caption,
+      width: width,
+      height: height,
+      chartConfig: chartConfig,
+      language: language,
+      attribution: attribution,
+      dividerType: dividerType,
+      name: name,
+      label: label,
+      fieldType: fieldType,
+      defaultValue: defaultValue,
+      required: required,
+      parties: parties,
+      layout: layout,
+      issuer: issuer,
+      docNumber: docNumber,
+      refItems: refItems,
+      refStyle: refStyle,
+      id: id,
+      semanticType: semanticType,
+      title: title,
+      children: children,
+      styleHint: styleHint,
+    );
+  }
+
   factory DslNode.fromJson(Map<String, dynamic> json) {
     final rawType = json['type'] as String? ?? 'paragraph';
     final type = DslNodeType.fromString(rawType);

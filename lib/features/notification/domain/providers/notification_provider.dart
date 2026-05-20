@@ -71,20 +71,22 @@ class NotificationState {
 
 class NotificationNotifier extends StateNotifier<NotificationState> {
   final NotificationDataSource _dataSource;
+  final Ref _ref;
 
-  NotificationNotifier(this._dataSource) : super(const NotificationState()) {
+  NotificationNotifier(this._dataSource, this._ref) : super(const NotificationState()) {
     loadNotifications();
   }
 
   Future<void> loadNotifications() async {
     state = state.copyWith(isLoading: true);
     try {
-      final result = await _dataSource.getNotifications();
+      final result = await _dataSource.getNotifications(pageSize: 100);
       final items = (result['items'] as List? ?? [])
           .map((e) => NotificationItem.fromApi(e as Map<String, dynamic>))
           .toList();
       if (!mounted) return;
       state = state.copyWith(notifications: items, isLoading: false);
+      _syncUnreadCount();
     } catch (_) {
       if (!mounted) return;
       state = state.copyWith(isLoading: false);
@@ -103,6 +105,7 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
       }).toList(),
     );
     try { await _dataSource.markAsRead(id); } catch (_) {}
+    _syncUnreadCount();
   }
 
   Future<void> markAllAsRead() async {
@@ -110,6 +113,11 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
       notifications: state.notifications.map((n) => n.copyWith(isRead: true)).toList(),
     );
     try { await _dataSource.markAllAsRead(); } catch (_) {}
+    _syncUnreadCount();
+  }
+
+  void _syncUnreadCount() {
+    _ref.invalidate(unreadCountProvider);
   }
 }
 
@@ -121,5 +129,5 @@ final unreadCountProvider = FutureProvider<int>((ref) async {
 
 final notificationProvider =
     StateNotifierProvider<NotificationNotifier, NotificationState>((ref) {
-  return NotificationNotifier(NotificationDataSource());
+  return NotificationNotifier(NotificationDataSource(), ref);
 });

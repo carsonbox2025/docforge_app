@@ -32,6 +32,15 @@ class _InputStageState extends ConsumerState<InputStage> {
     final notifier = ref.read(generateProvider.notifier);
     final scenesAsync = ref.watch(sceneListProvider);
 
+    // 如果还没有选择场景，且场景列表已加载成功，默认选中第一个
+    if (scenesAsync.hasValue && state.selectedScene == null && scenesAsync.value!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && ref.read(generateProvider).selectedScene == null) {
+          _doSwitchScene(scenesAsync.value!.first, notifier);
+        }
+      });
+    }
+
     return Column(
       children: [
         FeatureHeader(

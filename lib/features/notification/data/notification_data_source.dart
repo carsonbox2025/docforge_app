@@ -5,7 +5,7 @@ class NotificationDataSource {
   Future<Map<String, dynamic>> getNotifications({
     String category = 'all',
     int page = 1,
-    int pageSize = 20,
+    int pageSize = 100,
   }) async {
     final response = await ApiClient.instance.get(
       AppConstants.notificationsListUrl,

@@ -124,6 +124,9 @@ class _ParagraphWidgetState extends State<_ParagraphWidget>
     with SingleTickerProviderStateMixin {
   late final AnimationController _cursorCtrl;
 
+  String? _cachedText;
+  InlineSpan? _cachedSpan;
+
   @override
   void initState() {
     super.initState();
@@ -135,6 +138,15 @@ class _ParagraphWidgetState extends State<_ParagraphWidget>
   void dispose() {
     _cursorCtrl.dispose();
     super.dispose();
+  }
+
+  InlineSpan _parseWithCache(String text, TextStyle baseStyle) {
+    if (text == _cachedText && _cachedSpan != null) {
+      return _cachedSpan!;
+    }
+    _cachedText = text;
+    _cachedSpan = parseInlineMarkdown(text, baseStyle: baseStyle);
+    return _cachedSpan!;
   }
 
   @override
@@ -157,7 +169,7 @@ class _ParagraphWidgetState extends State<_ParagraphWidget>
         children: [
           Expanded(
             child: RichText(
-              text: parseInlineMarkdown(text, baseStyle: baseStyle),
+              text: _parseWithCache(text, baseStyle),
             ),
           ),
           if (widget.isStreaming)

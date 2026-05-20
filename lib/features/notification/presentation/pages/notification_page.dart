@@ -74,14 +74,18 @@ class NotificationPage extends ConsumerWidget {
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        '您有 ${state.unreadCount} 条未读消息',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      Builder(builder: (context) {
+                        final serverUnread = ref.watch(unreadCountProvider)
+                            .maybeWhen(data: (c) => c, orElse: () => 0);
+                        return Text(
+                          '您有 $serverUnread 条未读消息',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.6),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        );
+                      }),
                     ],
                   ),
                 ),

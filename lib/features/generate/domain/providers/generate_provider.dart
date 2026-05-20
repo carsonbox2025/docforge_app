@@ -260,12 +260,27 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
     // 更新 outline
     final outlineRaw = dslUpdate['outline'] as List<dynamic>?;
     if (outlineRaw != null) {
-      final outline = outlineRaw
+      final newOutline = outlineRaw
           .map((o) => DslOutline.fromJson(o as Map<String, dynamic>))
           .toList();
-      if (outline.isNotEmpty) {
-        _log('[Generate] outline updated: ${outline.length} sections');
-        state = state.copyWith(outline: outline);
+      
+      if (newOutline.isNotEmpty) {
+        bool outlineChanged = newOutline.length != state.outline.length;
+        if (!outlineChanged) {
+          for (int i = 0; i < newOutline.length; i++) {
+            if (newOutline[i].id != state.outline[i].id ||
+                newOutline[i].title != state.outline[i].title ||
+                newOutline[i].status != state.outline[i].status) {
+              outlineChanged = true;
+              break;
+            }
+          }
+        }
+        
+        if (outlineChanged) {
+          _log('[Generate] outline updated: ${newOutline.length} sections');
+          state = state.copyWith(outline: newOutline);
+        }
       }
     }
 
@@ -303,6 +318,39 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
                 .toSet();
             if (node.id == null || !existingIds.contains(node.id)) {
               nodes[section] = [...nodes[section]!, node];
+            }
+          }
+        } else if (op == 'update_text') {
+          // 增量文本更新：O(1) 内存操作
+          final nodeIndex = u['node_index'] as int?;
+          final delta = u['delta'] as String? ?? '';
+          if (nodeIndex != null && delta.isNotEmpty) {
+            final sectionNodes = nodes[section];
+            if (sectionNodes != null && nodeIndex < sectionNodes.length) {
+              final oldNode = sectionNodes[nodeIndex];
+              final updatedNode = oldNode.copyWith(
+                text: (oldNode.text ?? '') + delta,
+              );
+              nodes[section] = [
+                ...sectionNodes.sublist(0, nodeIndex),
+                updatedNode,
+                ...sectionNodes.sublist(nodeIndex + 1),
+              ];
+            }
+          }
+        } else if (op == 'replace_node') {
+          // 替换单个节点（list/table 增量）
+          final nodeIndex = u['node_index'] as int?;
+          final rawNode = u['node'] as Map<String, dynamic>?;
+          if (nodeIndex != null && rawNode != null) {
+            final sectionNodes = nodes[section];
+            if (sectionNodes != null && nodeIndex < sectionNodes.length) {
+              final updatedNode = DslNode.fromJson(rawNode);
+              nodes[section] = [
+                ...sectionNodes.sublist(0, nodeIndex),
+                updatedNode,
+                ...sectionNodes.sublist(nodeIndex + 1),
+              ];
             }
           }
         }
