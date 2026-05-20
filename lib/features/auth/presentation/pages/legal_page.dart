@@ -5,7 +5,6 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/network/api_client.dart';
-import '../../../../core/theme/app_spacing.dart';
 
 class LegalPage extends StatefulWidget {
   final String type;

@@ -281,8 +281,35 @@ class TaskDataSource {
       data: {'document_id': documentId, 'format': format},
       options: Options(responseType: ResponseType.bytes),
     );
-    _log('[TaskDataSource] exportDocument success: ${response.data?.length ?? 0} bytes');
-    return response.data!;
+
+    final bytes = response.data!;
+    final contentType = response.headers.value('content-type') ?? '';
+
+    // 后端错误时返回 HTTP 200 + JSON，需检测并抛出
+    if (contentType.contains('application/json') || _looksLikeJsonError(bytes)) {
+      _log('[TaskDataSource] exportDocument got JSON error response');
+      try {
+        final jsonStr = utf8.decode(bytes);
+        final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+        throw Exception(json['message'] ?? '导出失败');
+      } catch (e) {
+        if (e is Exception) rethrow;
+        throw Exception('导出失败');
+      }
+    }
+
+    _log('[TaskDataSource] exportDocument success: ${bytes.length} bytes');
+    return bytes;
+  }
+
+  /// 兜底：检测前几个字节是否为 JSON 特征 `{`
+  static bool _looksLikeJsonError(List<int> bytes) {
+    if (bytes.length < 2 || bytes.length > 2048) return false;
+    for (final b in bytes) {
+      if (b == 0x20 || b == 0x0A || b == 0x0D || b == 0x09) continue; // skip whitespace
+      return b == 0x7B; // '{'
+    }
+    return false;
   }
 
   /// 注册推送设备

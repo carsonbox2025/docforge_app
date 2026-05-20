@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../shared/widgets/common_widgets.dart';
 import '../../../auth/domain/providers/auth_provider.dart';
 import '../../../payment/domain/providers/payment_provider.dart' as payment;
 import '../../../notification/domain/providers/notification_provider.dart';
@@ -315,11 +314,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: Row(
         children: [
-          _buildStatItem('${stats?.generateCount ?? 0}', '生成文档'),
+          _buildStatItem('${stats.generateCount}', '生成文档'),
           _buildStatDivider(),
-          _buildStatItem('${stats?.polishCount ?? 0}', '精修次数'),
+          _buildStatItem('${stats.polishCount}', '精修次数'),
           _buildStatDivider(),
-          _buildStatItem(stats?.wordCountDisplay ?? '0', '字数'),
+          _buildStatItem(stats.wordCountDisplay, '字数'),
         ],
       ),
     );
@@ -554,8 +553,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 ),
               ),
             ),
-            if (item.badge != null)
-              BadgeWidget.primary(item.badge!),
             if (item.tag != null)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -694,7 +691,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 class _MenuItem {
   final IconData icon;
   final String title;
-  final String? badge;
   final String? tag;
   final Color? tagColor;
   final Color? tagBgColor;
@@ -703,7 +699,6 @@ class _MenuItem {
   const _MenuItem({
     required this.icon,
     required this.title,
-    this.badge,
     this.tag,
     this.tagColor,
     this.tagBgColor,

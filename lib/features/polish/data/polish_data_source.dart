@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../generate/data/task_data_source.dart';
@@ -8,7 +10,7 @@ import 'models/polish_models.dart';
 class PolishRemoteDataSource {
   final TaskDataSource _taskDs = TaskDataSource();
 
-  /// 提交润色任务（通过统一任务服务）
+  /// 提交精修任务（通过统一任务服务）
   Future<int> submitPolishTask(PolishRequest request) async {
     return _taskDs.submitTask(
       taskType: TaskType.polish,
@@ -16,9 +18,9 @@ class PolishRemoteDataSource {
         'text': request.text ?? '',
         'polish_level': request.level.value,
         'doc_type': request.docType,
-        'mode': request.mode,
+        'file_path': request.filePath,
       },
-      title: request.fileName ?? '润色文档',
+      title: request.fileName ?? '精修文档',
     );
   }
 
@@ -32,14 +34,49 @@ class PolishRemoteDataSource {
     return _taskDs.getTaskStatus(taskId);
   }
 
-  /// 导出润色结果
-  Future<Response> exportResult({
-    required String taskId,
-    required ExportFormat format,
+  /// 上传文件
+  Future<Map<String, dynamic>> uploadFile(File file) async {
+    final fileName = file.path.split('/').last;
+    final ext = fileName.split('.').last.toLowerCase();
+    final formData = FormData.fromMap({
+      'file': await MultipartFile.fromFile(
+        file.path,
+        filename: fileName,
+        contentType: MediaType(
+          ext == 'docx' ? 'application' : 'text',
+          ext == 'docx'
+              ? 'vnd.openxmlformats-officedocument.wordprocessingml.document'
+              : ext,
+        ),
+      ),
+    });
+
+    final response = await ApiClient.instance.post(
+      '${AppConstants.apiBaseUrl}/document/upload',
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+
+    final data = response.data;
+    if (data is Map && data['code'] == 200 && data['data'] != null) {
+      return Map<String, dynamic>.from(data['data'] as Map);
+    }
+    throw Exception('文件上传失败');
+  }
+
+  /// 导出精修结果
+  Future<Response> exportWord({
+    required int documentId,
+    required ExportMode exportMode,
+    required List<PolishSuggestion> suggestions,
   }) async {
     return ApiClient.instance.post(
-      '${AppConstants.apiBaseUrl}/polish/export',
-      data: {'task_id': taskId, 'format': format.name},
+      '${AppConstants.apiBaseUrl}/export/word',
+      data: {
+        'document_id': documentId,
+        'export_mode': exportMode.value,
+        'suggestions': suggestions.map((s) => s.toJson()).toList(),
+      },
       options: Options(responseType: ResponseType.bytes),
     );
   }

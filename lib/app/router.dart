@@ -12,6 +12,7 @@ import '../features/polish/presentation/pages/polish_page.dart';
 import '../features/translate/presentation/pages/translate_page.dart';
 import '../features/profile/presentation/pages/profile_page.dart';
 import '../features/notification/presentation/pages/notification_page.dart';
+import '../features/notification/presentation/pages/notification_detail_page.dart';
 import '../features/membership/presentation/pages/subscription_page.dart';
 import '../features/template/presentation/pages/template_gallery_page.dart';
 import '../features/template/presentation/pages/template_preview_page.dart';
@@ -116,6 +117,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
 
       GoRoute(path: '/notifications', pageBuilder: (_, _) => _fastFadePage(const NotificationPage(), const ValueKey('notifications'))),
+      GoRoute(
+        path: '/notifications/:id',
+        pageBuilder: (_, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return _fastFadePage(NotificationDetailPage(notificationId: id), ValueKey('notif-$id'));
+        },
+      ),
       GoRoute(path: '/subscription', pageBuilder: (_, _) => _fastFadePage(const SubscriptionPage(), const ValueKey('subscription'))),
       GoRoute(path: '/templates', pageBuilder: (_, _) => _fastFadePage(const TemplateGalleryPage(), const ValueKey('templates'))),
       GoRoute(path: '/templates/:id', pageBuilder: (_, state) {

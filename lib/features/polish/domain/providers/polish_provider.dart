@@ -1,56 +1,81 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import '../../data/models/polish_models.dart';
 import '../../data/polish_data_source.dart';
 import '../../../generate/data/task_data_source.dart';
-import '../../../../shared/models/dsl/dsl_node.dart' show DslNode;
-
-enum PolishStage { input, result }
+import '../../../../shared/utils/file_export.dart';
 
 class PolishState {
   final PolishStage stage;
   final InputMode inputMode;
   final PolishLevel level;
   final String docType;
-  final ExportFormat exportFormat;
-  final CompareTab compareTab;
-  final String? fileName;
   final String? textContent;
+  final String? fileName;
+  final String? filePath;
+  final int? fileSize;
   final bool isProcessing;
-  final String streamingText;
-  final PolishResult? result;
   final String? errorMessage;
 
-  // 进度
+  // 审阅进度
   final double progress;
   final String progressMsg;
+  final List<OutlineItem> outline;
 
-  // DSL 状态
-  final List<DslNode> dslNodes;
+  // 建议列表
+  final List<PolishSuggestion> suggestions;
+  final String? filterCategory;
+  final String? filterSeverity;
+  final int currentSuggestionIndex;
+
+  // 原始段落
+  final List<SourceParagraph> originalParagraphs;
+
+  // 任务/文档 ID
   final int? taskId;
+  final int? documentId;
+  final String? sourceFileUrl;
 
-  // 模式
-  final String mode; // quick / professional
+  // Undo/Redo
+  final List<PolishUndoAction> undoStack;
+  final int undoStackPointer;
+
+  // 统计
+  final int totalSuggestions;
+  final int acceptedCount;
+  final int rejectedCount;
+  final int pendingCount;
 
   const PolishState({
     this.stage = PolishStage.input,
-    this.inputMode = InputMode.upload,
+    this.inputMode = InputMode.text,
     this.level = PolishLevel.medium,
     this.docType = '自动检测',
-    this.exportFormat = ExportFormat.docx,
-    this.compareTab = CompareTab.diff,
-    this.fileName,
     this.textContent,
+    this.fileName,
+    this.filePath,
+    this.fileSize,
     this.isProcessing = false,
-    this.streamingText = '',
-    this.result,
     this.errorMessage,
     this.progress = 0,
     this.progressMsg = '',
-    this.dslNodes = const [],
+    this.outline = const [],
+    this.suggestions = const [],
+    this.filterCategory,
+    this.filterSeverity,
+    this.currentSuggestionIndex = -1,
+    this.originalParagraphs = const [],
     this.taskId,
-    this.mode = 'quick',
+    this.documentId,
+    this.sourceFileUrl,
+    this.undoStack = const [],
+    this.undoStackPointer = 0,
+    this.totalSuggestions = 0,
+    this.acceptedCount = 0,
+    this.rejectedCount = 0,
+    this.pendingCount = 0,
   });
 
   PolishState copyWith({
@@ -58,46 +83,77 @@ class PolishState {
     InputMode? inputMode,
     PolishLevel? level,
     String? docType,
-    ExportFormat? exportFormat,
-    CompareTab? compareTab,
-    String? fileName,
     String? textContent,
+    String? fileName,
+    String? filePath,
+    int? fileSize,
     bool? isProcessing,
-    String? streamingText,
-    PolishResult? result,
     String? errorMessage,
     double? progress,
     String? progressMsg,
-    List<DslNode>? dslNodes,
+    List<OutlineItem>? outline,
+    List<PolishSuggestion>? suggestions,
+    String? filterCategory,
+    String? filterSeverity,
+    int? currentSuggestionIndex,
+    List<SourceParagraph>? originalParagraphs,
     int? taskId,
-    String? mode,
-    bool clearResult = false,
+    int? documentId,
+    String? sourceFileUrl,
+    List<PolishUndoAction>? undoStack,
+    int? undoStackPointer,
     bool clearError = false,
     bool clearFileName = false,
+    bool clearFilePath = false,
     bool clearTextContent = false,
-    bool clearStreamingText = false,
-    bool clearTaskId = false,
+    bool clearFilterCategory = false,
+    bool clearFilterSeverity = false,
   }) {
+    final newSuggestions = suggestions ?? this.suggestions;
     return PolishState(
       stage: stage ?? this.stage,
       inputMode: inputMode ?? this.inputMode,
       level: level ?? this.level,
       docType: docType ?? this.docType,
-      exportFormat: exportFormat ?? this.exportFormat,
-      compareTab: compareTab ?? this.compareTab,
-      fileName: clearFileName ? null : (fileName ?? this.fileName),
       textContent: clearTextContent ? null : (textContent ?? this.textContent),
+      fileName: clearFileName ? null : (fileName ?? this.fileName),
+      filePath: clearFilePath ? null : (filePath ?? this.filePath),
+      fileSize: fileSize ?? this.fileSize,
       isProcessing: isProcessing ?? this.isProcessing,
-      streamingText: clearStreamingText ? '' : (streamingText ?? this.streamingText),
-      result: clearResult ? null : (result ?? this.result),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       progress: progress ?? this.progress,
       progressMsg: progressMsg ?? this.progressMsg,
-      dslNodes: dslNodes ?? this.dslNodes,
-      taskId: clearTaskId ? null : (taskId ?? this.taskId),
-      mode: mode ?? this.mode,
+      outline: outline ?? this.outline,
+      suggestions: newSuggestions,
+      filterCategory: clearFilterCategory ? null : (filterCategory ?? this.filterCategory),
+      filterSeverity: clearFilterSeverity ? null : (filterSeverity ?? this.filterSeverity),
+      currentSuggestionIndex: currentSuggestionIndex ?? this.currentSuggestionIndex,
+      originalParagraphs: originalParagraphs ?? this.originalParagraphs,
+      taskId: taskId ?? this.taskId,
+      documentId: documentId ?? this.documentId,
+      sourceFileUrl: sourceFileUrl ?? this.sourceFileUrl,
+      undoStack: undoStack ?? this.undoStack,
+      undoStackPointer: undoStackPointer ?? this.undoStackPointer,
+      totalSuggestions: newSuggestions.length,
+      acceptedCount: newSuggestions.where((s) => s.status == 'accepted').length,
+      rejectedCount: newSuggestions.where((s) => s.status == 'rejected').length,
+      pendingCount: newSuggestions.where((s) => s.status == 'pending').length,
     );
   }
+
+  List<PolishSuggestion> get filteredSuggestions {
+    var list = suggestions;
+    if (filterCategory != null) {
+      list = list.where((s) => s.category == filterCategory).toList();
+    }
+    if (filterSeverity != null) {
+      list = list.where((s) => s.severity == filterSeverity).toList();
+    }
+    return list;
+  }
+
+  bool get canUndo => undoStackPointer > 0;
+  bool get canRedo => undoStackPointer < undoStack.length;
 }
 
 class PolishNotifier extends StateNotifier<PolishState> {
@@ -114,62 +170,173 @@ class PolishNotifier extends StateNotifier<PolishState> {
     super.dispose();
   }
 
+  // ─── 设置方法 ───
+
   void setInputMode(InputMode mode) => state = state.copyWith(inputMode: mode);
   void setLevel(PolishLevel level) => state = state.copyWith(level: level);
   void setDocType(String docType) => state = state.copyWith(docType: docType);
-  void setExportFormat(ExportFormat format) => state = state.copyWith(exportFormat: format);
-  void setCompareTab(CompareTab tab) => state = state.copyWith(compareTab: tab);
-  void setFileName(String? name) => state = state.copyWith(fileName: name ?? '', clearFileName: name == null);
   void setTextContent(String text) => state = state.copyWith(textContent: text);
-  void setMode(String mode) => state = state.copyWith(mode: mode);
+  void setFileName(String? name) =>
+      state = state.copyWith(fileName: name ?? '', clearFileName: name == null);
+  void setFilePath(String? path) =>
+      state = state.copyWith(filePath: path, clearFilePath: path == null);
 
-  /// 开始润色（通过统一任务服务）
-  Future<void> startPolish() async {
-    final text = state.textContent;
-    if (text == null || text.trim().isEmpty) {
-      state = state.copyWith(errorMessage: '请输入或上传需要润色的文本');
-      return;
+  void setFile(String? name, String? path, int? size) {
+    state = state.copyWith(
+      fileName: name,
+      filePath: path,
+      fileSize: size,
+      clearFileName: name == null,
+      clearFilePath: path == null,
+    );
+  }
+
+  void setFilterCategory(String? category) =>
+      state = state.copyWith(filterCategory: category, clearFilterCategory: category == null);
+  void setFilterSeverity(String? severity) =>
+      state = state.copyWith(filterSeverity: severity, clearFilterSeverity: severity == null);
+  void setCurrentSuggestionIndex(int index) =>
+      state = state.copyWith(currentSuggestionIndex: index);
+
+  // ─── 建议操作 ───
+
+  void acceptSuggestion(String id) {
+    final idx = state.suggestions.indexWhere((s) => s.id == id);
+    if (idx < 0) return;
+
+    final previousStatus = state.suggestions[idx].status;
+    final newUndoStack = state.undoStack.sublist(0, state.undoStackPointer).toList()
+      ..add(PolishUndoAction(
+        action: 'accept',
+        suggestionId: id,
+        previousStatus: previousStatus,
+      ));
+
+    final newSuggestions = List<PolishSuggestion>.from(state.suggestions);
+    newSuggestions[idx] = newSuggestions[idx].copyWith(status: 'accepted');
+
+    state = state.copyWith(
+      suggestions: newSuggestions,
+      undoStack: newUndoStack,
+      undoStackPointer: newUndoStack.length,
+    );
+  }
+
+  void rejectSuggestion(String id) {
+    final idx = state.suggestions.indexWhere((s) => s.id == id);
+    if (idx < 0) return;
+
+    final previousStatus = state.suggestions[idx].status;
+    final newUndoStack = state.undoStack.sublist(0, state.undoStackPointer).toList()
+      ..add(PolishUndoAction(
+        action: 'reject',
+        suggestionId: id,
+        previousStatus: previousStatus,
+      ));
+
+    final newSuggestions = List<PolishSuggestion>.from(state.suggestions);
+    newSuggestions[idx] = newSuggestions[idx].copyWith(status: 'rejected');
+
+    state = state.copyWith(
+      suggestions: newSuggestions,
+      undoStack: newUndoStack,
+      undoStackPointer: newUndoStack.length,
+    );
+  }
+
+  void acceptAll() {
+    final newSuggestions = state.suggestions
+        .map((s) => s.status == 'pending' ? s.copyWith(status: 'accepted') : s)
+        .toList();
+    state = state.copyWith(suggestions: newSuggestions);
+  }
+
+  void rejectAll() {
+    final newSuggestions = state.suggestions
+        .map((s) => s.status == 'pending' ? s.copyWith(status: 'rejected') : s)
+        .toList();
+    state = state.copyWith(suggestions: newSuggestions);
+  }
+
+  void undo() {
+    if (!state.canUndo) return;
+    final pointer = state.undoStackPointer - 1;
+    final action = state.undoStack[pointer];
+    final idx = state.suggestions.indexWhere((s) => s.id == action.suggestionId);
+    if (idx >= 0) {
+      final newSuggestions = List<PolishSuggestion>.from(state.suggestions);
+      newSuggestions[idx] = newSuggestions[idx].copyWith(status: action.previousStatus);
+      state = state.copyWith(suggestions: newSuggestions, undoStackPointer: pointer);
     }
+  }
 
-    _progressSub?.cancel();
-    state = state.copyWith(isProcessing: true, clearError: true, clearStreamingText: true);
-
-    try {
-      final request = PolishRequest(
-        text: text,
-        inputMode: state.inputMode,
-        level: state.level,
-        docType: state.docType,
-        fileName: state.fileName,
-        mode: state.mode,
-      );
-
-      final taskId = await _dataSource.submitPolishTask(request);
-      state = state.copyWith(taskId: taskId);
-
-      _listenProgress(taskId, text);
-    } catch (e) {
-      debugPrint('[Polish] submit error: $e');
+  void redo() {
+    if (!state.canRedo) return;
+    final action = state.undoStack[state.undoStackPointer];
+    final idx = state.suggestions.indexWhere((s) => s.id == action.suggestionId);
+    if (idx >= 0) {
+      final newSuggestions = List<PolishSuggestion>.from(state.suggestions);
+      final newStatus = action.action == 'accept' ? 'accepted' : 'rejected';
+      newSuggestions[idx] = newSuggestions[idx].copyWith(status: newStatus);
       state = state.copyWith(
-        isProcessing: false,
-        errorMessage: '润色提交失败: $e',
+        suggestions: newSuggestions,
+        undoStackPointer: state.undoStackPointer + 1,
       );
     }
   }
 
-  void _listenProgress(int taskId, String originalText) {
+  // ─── 开始精修 ───
+
+  Future<void> startPolish() async {
+    final text = state.textContent;
+    final hasFile = state.filePath != null && state.filePath!.isNotEmpty;
+
+    if (!hasFile && (text == null || text.trim().isEmpty)) {
+      state = state.copyWith(errorMessage: '请输入或上传需要审阅的文本');
+      return;
+    }
+
     _progressSub?.cancel();
-    final buffer = StringBuffer();
+    state = state.copyWith(
+      isProcessing: true,
+      stage: PolishStage.reviewing,
+      clearError: true,
+    );
+
+    try {
+      final request = PolishRequest(
+        text: text,
+        filePath: state.filePath,
+        inputMode: state.inputMode,
+        level: state.level,
+        docType: state.docType,
+        fileName: state.fileName,
+      );
+
+      final taskId = await _dataSource.submitPolishTask(request);
+      state = state.copyWith(taskId: taskId);
+      _listenProgress(taskId);
+    } catch (e) {
+      debugPrint('[Polish] submit error: $e');
+      state = state.copyWith(
+        isProcessing: false,
+        stage: PolishStage.input,
+        errorMessage: '提交失败: $e',
+      );
+    }
+  }
+
+  void _listenProgress(int taskId) {
+    _progressSub?.cancel();
 
     final stream = _dataSource.polishProgressStream(taskId);
     _progressSub = stream.listen(
       (update) {
         if (!mounted) return;
 
-        // 解析 DSL 更新
         final detail = update.detail;
         if (detail != null) {
-          _handleDslUpdate(detail, buffer);
+          _handleDetail(detail);
         }
 
         state = state.copyWith(
@@ -179,189 +346,167 @@ class PolishNotifier extends StateNotifier<PolishState> {
       },
       onDone: () {
         if (!mounted) return;
-        _onStreamDone(taskId, originalText);
+        _onStreamDone(taskId);
       },
       onError: (e) {
         if (!mounted) return;
         debugPrint('[Polish] progress error: $e');
         state = state.copyWith(
           isProcessing: false,
-          errorMessage: '润色失败，请重试',
+          stage: PolishStage.input,
+          errorMessage: '审阅失败，请重试',
         );
       },
     );
   }
 
-  void _handleDslUpdate(Map<String, dynamic> detail, StringBuffer buffer) {
-    final dslUpdate = detail['dsl_update'] as Map<String, dynamic>?;
-    if (dslUpdate == null) return;
+  void _handleDetail(Map<String, dynamic> detail) {
+    // 建议更新
+    final suggestionsUpdate = detail['suggestions_update'] as Map<String, dynamic>?;
+    if (suggestionsUpdate != null) {
+      final rawSuggestions = suggestionsUpdate['suggestions'] as List<dynamic>? ?? [];
+      final newItems = rawSuggestions
+          .map((s) => PolishSuggestion.fromJson(s as Map<String, dynamic>))
+          .toList();
 
-    // 从 DSL nodes 中提取文本
-    final nodeUpdates = dslUpdate['node_updates'] as List<dynamic>?;
-    if (nodeUpdates != null) {
-      var allNodes = <DslNode>[...state.dslNodes];
+      // 追加到现有建议列表
+      final allSuggestions = [...state.suggestions, ...newItems];
+      state = state.copyWith(suggestions: allSuggestions);
 
-      for (final update in nodeUpdates) {
-        final u = update as Map<String, dynamic>;
-        final op = u['op'] as String? ?? 'append';
-
-        if (op == 'replace_all') {
-          final rawNodes = u['nodes'] as List<dynamic>? ?? [];
-          allNodes = rawNodes.map((n) => DslNode.fromJson(n as Map<String, dynamic>)).toList();
-        } else if (op == 'append') {
-          final rawNode = u['node'] as Map<String, dynamic>?;
-          if (rawNode != null) {
-            allNodes.add(DslNode.fromJson(rawNode));
-          }
-        }
+      // 首批建议到达后提前进入 ReviewStage
+      if (state.stage == PolishStage.reviewing && allSuggestions.isNotEmpty) {
+        state = state.copyWith(stage: PolishStage.review);
       }
+    }
 
-      // 从 nodes 提取文本用于 streamingText
-      final texts = allNodes
-          .where((n) => n.text != null && n.text!.isNotEmpty)
-          .map((n) => n.text!)
-          .join('\n\n');
+    // 章节大纲
+    final outlineData = detail['outline'] as Map<String, dynamic>?;
+    if (outlineData != null) {
+      final sections = outlineData['sections'] as List<dynamic>? ?? [];
+      final items = sections
+          .map((s) => OutlineItem.fromJson(s as Map<String, dynamic>))
+          .toList();
+      state = state.copyWith(outline: items);
+    }
 
-      state = state.copyWith(
-        dslNodes: allNodes,
-        streamingText: texts,
-      );
+    // 审阅完成
+    final reviewComplete = detail['review_complete'] as Map<String, dynamic>?;
+    if (reviewComplete != null) {
+      // 从进度流中我们已经收集了建议，无需额外处理
+      debugPrint('[Polish] review complete: ${reviewComplete['total_suggestions']} suggestions');
     }
   }
 
-  Future<void> _onStreamDone(int taskId, String originalText) async {
+  Future<void> _onStreamDone(int taskId) async {
     try {
       final status = await _dataSource.getTaskStatus(taskId);
       if (status.status == TaskStatus.completed) {
-        String polished = state.streamingText;
-
-        // 从 dsl_content 提取润色结果
+        // 从 dsl_content 提取 PolishResult
         final dslContent = status.resultData;
         if (dslContent != null) {
-          final extracted = _extractTextFromDsl(dslContent);
-          if (extracted.isNotEmpty) {
-            polished = extracted;
-          }
+          _parsePolishResult(dslContent);
         }
 
         state = state.copyWith(
           isProcessing: false,
-          stage: PolishStage.result,
-          result: _buildResult(polished, originalText),
+          stage: PolishStage.review,
+          documentId: taskId,
         );
       } else if (status.status == TaskStatus.failed) {
         state = state.copyWith(
           isProcessing: false,
-          errorMessage: status.errorMsg ?? '润色失败',
-        );
-      } else {
-        state = state.copyWith(
-          isProcessing: false,
-          errorMessage: '润色超时',
+          stage: PolishStage.input,
+          errorMessage: status.errorMsg ?? '审阅失败',
         );
       }
     } catch (e) {
-      final polished = state.streamingText;
-      if (polished.isNotEmpty) {
-        state = state.copyWith(
-          isProcessing: false,
-          stage: PolishStage.result,
-          result: _buildResult(polished, originalText),
-        );
+      debugPrint('[Polish] onStreamDone error: $e');
+      if (state.suggestions.isNotEmpty) {
+        state = state.copyWith(isProcessing: false, stage: PolishStage.review);
       } else {
         state = state.copyWith(
           isProcessing: false,
-          errorMessage: '润色失败，未收到结果',
+          stage: PolishStage.input,
+          errorMessage: '审阅失败，未收到结果',
         );
       }
     }
   }
 
-  String _extractTextFromDsl(Map<String, dynamic> dsl) {
-    final children = dsl['children'] as List<dynamic>? ?? [];
-    final texts = <String>[];
-    for (final section in children) {
-      final nodes = section['children'] as List<dynamic>? ?? [];
-      for (final node in nodes) {
-        final text = node['text'] as String?;
-        if (text != null && text.isNotEmpty) {
-          texts.add(text);
-        }
-      }
-    }
-    return texts.join('\n\n');
-  }
+  void _parsePolishResult(Map<String, dynamic> data) {
+    if (data['source_type'] != 'polish') return;
 
-  PolishResult _buildResult(String polishedText, String originalText) {
-    final paragraphs = _generateDiffParagraphs(originalText, polishedText);
-    return PolishResult(
-      title: state.fileName ?? '文档润色',
-      level: state.level,
-      changeCount: _countChanges(paragraphs),
-      acceptedCount: _countChanges(paragraphs),
-      pendingCount: 0,
-      paragraphs: paragraphs,
-      originalText: originalText,
-      polishedText: polishedText,
+    final rawParagraphs = data['original_paragraphs'] as List<dynamic>? ?? [];
+    final paragraphs = rawParagraphs
+        .map((p) => SourceParagraph.fromJson(p as Map<String, dynamic>))
+        .toList();
+
+    // 如果 SSE 流已经推送了建议，则不重复添加
+    final existingIds = state.suggestions.map((s) => s.id).toSet();
+    final rawSuggestions = data['suggestions'] as List<dynamic>? ?? [];
+    final extraSuggestions = rawSuggestions
+        .map((s) => PolishSuggestion.fromJson(s as Map<String, dynamic>))
+        .where((s) => !existingIds.contains(s.id))
+        .toList();
+
+    final allSuggestions = [...state.suggestions, ...extraSuggestions];
+
+    state = state.copyWith(
+      originalParagraphs: paragraphs,
+      suggestions: allSuggestions,
+      sourceFileUrl: data['source_file_url'] as String?,
     );
   }
 
-  List<PolishParagraph> _generateDiffParagraphs(String original, String polished) {
-    final originalLines = original.split(RegExp(r'\n')).where((l) => l.trim().isNotEmpty).toList();
-    final polishedLines = polished.split(RegExp(r'\n')).where((l) => l.trim().isNotEmpty).toList();
-    final paragraphs = <PolishParagraph>[];
-    final maxLen = originalLines.length > polishedLines.length ? originalLines.length : polishedLines.length;
+  // ─── 导出 ───
 
-    for (var i = 0; i < maxLen; i++) {
-      final segments = <DiffSegment>[];
-      if (i < originalLines.length && i < polishedLines.length) {
-        if (originalLines[i].trim() == polishedLines[i].trim()) {
-          segments.add(DiffSegment(type: 'equal', text: originalLines[i].trim()));
-        } else {
-          segments.add(DiffSegment(type: 'delete', text: originalLines[i].trim()));
-          segments.add(DiffSegment(type: 'insert', text: polishedLines[i].trim()));
-        }
-      } else if (i < originalLines.length) {
-        segments.add(DiffSegment(type: 'delete', text: originalLines[i].trim()));
-      } else {
-        segments.add(DiffSegment(type: 'insert', text: polishedLines[i].trim()));
-      }
-      if (segments.isNotEmpty) paragraphs.add(PolishParagraph(segments: segments));
+  Future<void> exportDocument(ExportMode mode) async {
+    final documentId = state.documentId;
+    if (documentId == null) return;
+
+    state = state.copyWith(isProcessing: true);
+    try {
+      final response = await _dataSource.exportWord(
+        documentId: documentId,
+        exportMode: mode,
+        suggestions: state.suggestions,
+      );
+
+      final bytes = response.data is List<int>
+          ? Uint8List.fromList(response.data as List<int>)
+          : response.data as Uint8List;
+
+      final title = state.suggestions.isNotEmpty
+          ? '精修文档'
+          : '审阅报告';
+      final modeSuffix = mode == ExportMode.report ? '_报告' : '';
+      await FileExporter.saveAndOpen(
+        bytes: bytes,
+        fileName: '$title$modeSuffix.docx',
+      );
+
+      state = state.copyWith(isProcessing: false);
+    } catch (e) {
+      debugPrint('[Polish] export error: $e');
+      state = state.copyWith(isProcessing: false, errorMessage: '导出失败');
     }
-    return paragraphs;
   }
 
-  int _countChanges(List<PolishParagraph> paragraphs) {
-    int count = 0;
-    for (final para in paragraphs) {
-      for (final seg in para.segments) {
-        if (seg.type == 'delete' || seg.type == 'insert') count++;
-      }
-    }
-    return count;
-  }
+  // ─── 导航 ───
 
   void goBackToInput() {
     _progressSub?.cancel();
-    state = state.copyWith(stage: PolishStage.input, clearResult: true, clearStreamingText: true);
-  }
-
-  void rePolish() {
-    _progressSub?.cancel();
-    state = state.copyWith(stage: PolishStage.input, clearResult: true, clearStreamingText: true);
-  }
-
-  Future<void> exportResult() async {
-    final result = state.result;
-    if (result == null) return;
-    state = state.copyWith(isProcessing: true);
-    try {
-      await _dataSource.exportResult(taskId: result.title, format: state.exportFormat);
-      state = state.copyWith(isProcessing: false);
-    } catch (e) {
-      debugPrint('[Polish] Export error: $e');
-      state = state.copyWith(isProcessing: false, errorMessage: '导出失败');
-    }
+    state = state.copyWith(
+      stage: PolishStage.input,
+      isProcessing: false,
+      suggestions: [],
+      outline: [],
+      originalParagraphs: [],
+      undoStack: [],
+      undoStackPointer: 0,
+      progress: 0,
+      clearError: true,
+    );
   }
 }
 

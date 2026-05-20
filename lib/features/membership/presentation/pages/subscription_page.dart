@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/payment_channel_card.dart';

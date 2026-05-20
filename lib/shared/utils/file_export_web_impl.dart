@@ -6,7 +6,7 @@ import 'dart:typed_data';
 void downloadBlob(Uint8List bytes, String safeName) {
   final blob = html.Blob([bytes]);
   final url = html.Url.createObjectUrlFromBlob(blob);
-  final anchor = html.AnchorElement(href: url)
+  html.AnchorElement(href: url)
     ..setAttribute('download', safeName)
     ..click();
   html.Url.revokeObjectUrl(url);

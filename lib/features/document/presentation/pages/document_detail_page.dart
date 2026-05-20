@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:open_filex/open_filex.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../shared/utils/file_export.dart';
-import '../../../generate/data/models/generate_models.dart';
 import '../../../../shared/models/dsl/dsl_node.dart';
 import '../../../../shared/widgets/dsl/dsl_renderer.dart';
 import '../../data/document_data_source.dart';

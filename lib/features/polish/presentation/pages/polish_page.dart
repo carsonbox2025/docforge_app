@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../shared/widgets/feature_header.dart';
 import '../../data/models/polish_models.dart';
 import '../../domain/providers/polish_provider.dart';
-import '../../../../shared/widgets/feature_header.dart';
 
 class PolishPage extends ConsumerWidget {
   const PolishPage({super.key});
@@ -15,10 +16,19 @@ class PolishPage extends ConsumerWidget {
 
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
-      child: state.stage == PolishStage.input
-          ? const _InputStage(key: ValueKey('input'))
-          : const _ResultStage(key: ValueKey('result')),
+      child: _stageWidget(state.stage),
     );
+  }
+
+  Widget _stageWidget(PolishStage stage) {
+    switch (stage) {
+      case PolishStage.input:
+        return const _InputStage(key: ValueKey('input'));
+      case PolishStage.reviewing:
+        return const _ReviewingStage(key: ValueKey('reviewing'));
+      case PolishStage.review:
+        return const _ReviewStage(key: ValueKey('review'));
+    }
   }
 }
 
@@ -40,93 +50,63 @@ class _InputStage extends ConsumerWidget {
         children: [
           const FeatureHeader(
             color: AppColors.success,
-            title: '文档精修，专业排版',
-            subtitle: '上传或粘贴文本，智能润色，专业排版并导出',
+            title: '文档精修',
+            subtitle: 'AI 校审建议，逐条确认，专业排版导出',
           ),
           Expanded(
             child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Input mode tabs
+                  // 输入模式切换
                   _InputModeTabs(
-                    activeMode: state.inputMode,
-                    onChanged: (mode) => notifier.setInputMode(mode),
+                    mode: state.inputMode,
+                    onChanged: (m) => notifier.setInputMode(m),
                   ),
+                  const SizedBox(height: AppSpacing.lg),
 
-                  // Upload zone or text input
-                  state.inputMode == InputMode.upload
-                      ? SizedBox(
-                          width: double.infinity,
-                          child: _UploadZone(
-                            fileName: state.fileName,
-                            onFileSelected: (name) => notifier.setFileName(name),
-                          ),
-                        )
-                      : SizedBox(
-                          width: double.infinity,
-                          child: _TextInputArea(
-                            onChanged: (text) => notifier.setTextContent(text),
-                          ),
-                        ),
+                  // 输入区域
+                  if (state.inputMode == InputMode.upload)
+                    _UploadZone(
+                      fileName: state.fileName,
+                      fileSize: state.fileSize,
+                      onPick: () => _pickFile(context, notifier),
+                    )
+                  else
+                    _TextInputArea(
+                      text: state.textContent ?? '',
+                      onChanged: (t) => notifier.setTextContent(t),
+                    ),
+                  const SizedBox(height: AppSpacing.xl),
 
-                  // Document type
-                  const SizedBox(height: 4),
-                  const _SectionLabel('文档类型'),
+                  // 文档类型
+                  _SectionLabel('文档类型'),
+                  const SizedBox(height: AppSpacing.sm),
                   _DocTypePills(
                     selected: state.docType,
-                    onChanged: (type) => notifier.setDocType(type),
+                    onChanged: (t) => notifier.setDocType(t),
                   ),
+                  const SizedBox(height: AppSpacing.xl),
 
-                  // Polish level
-                  const SizedBox(height: 4),
-                  const _SectionLabel('润色强度'),
+                  // 润色强度
+                  _SectionLabel('润色强度'),
+                  const SizedBox(height: AppSpacing.sm),
                   _LevelSelector(
-                    selectedLevel: state.level,
-                    onChanged: (level) => notifier.setLevel(level),
+                    selected: state.level,
+                    onChanged: (l) => notifier.setLevel(l),
                   ),
+                  const SizedBox(height: AppSpacing.xxxl),
 
-                  // Mode toggle
-                  const SizedBox(height: 4),
-                  const _SectionLabel('润色模式'),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceHover,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          _PolishModeChip(
-                            label: '快速润色',
-                            icon: Icons.bolt,
-                            isActive: state.mode == 'quick',
-                            onTap: () => notifier.setMode('quick'),
-                          ),
-                          _PolishModeChip(
-                            label: '专业精修',
-                            icon: Icons.auto_awesome,
-                            isActive: state.mode == 'professional',
-                            onTap: () => notifier.setMode('professional'),
-                          ),
-                        ],
-                      ),
-                    ),
+                  // 开始按钮
+                  _StartButton(
+                    enabled: !state.isProcessing,
+                    onPressed: () => notifier.startPolish(),
                   ),
-
-                  // Action button
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.md),
-                    child: _StartButton(
-                      isLoading: state.isProcessing,
-                      onPressed: () => notifier.startPolish(),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                  if (state.errorMessage != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    _ErrorMessage(message: state.errorMessage!),
+                  ],
                 ],
               ),
             ),
@@ -136,79 +116,324 @@ class _InputStage extends ConsumerWidget {
     );
   }
 
+  Future<void> _pickFile(BuildContext context, PolishNotifier notifier) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['docx', 'txt', 'md'],
+    );
+    if (result != null && result.files.single.path != null) {
+      final file = result.files.single;
+      notifier.setFile(file.name, file.path, file.size);
+    }
+  }
 }
 
-// ── Input mode tabs ──
+// ═══════════════════════════════════════════════════════
+// Stage 2: Reviewing (进度)
+// ═══════════════════════════════════════════════════════
 
-class _InputModeTabs extends StatelessWidget {
-  final InputMode activeMode;
-  final ValueChanged<InputMode> onChanged;
-
-  const _InputModeTabs({
-    required this.activeMode,
-    required this.onChanged,
-  });
+class _ReviewingStage extends ConsumerWidget {
+  const _ReviewingStage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: Row(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(polishProvider);
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: Column(
         children: [
-          _buildTab(
-            icon: Icons.upload_outlined,
-            label: '上传文档',
-            mode: InputMode.upload,
+          const FeatureHeader(
+            color: AppColors.success,
+            title: '正在审阅',
+            subtitle: 'AI 正在分析您的文档，请稍候...',
+            showBackButton: true,
           ),
-          _buildTab(
-            icon: Icons.description_outlined,
-            label: '粘贴文本',
-            mode: InputMode.text,
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                children: [
+                  // 进度条
+                  _ProgressIndicator(
+                    progress: state.progress,
+                    message: state.progressMsg,
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // 章节大纲（大文档）
+                  if (state.outline.isNotEmpty) ...[
+                    _SectionLabel('章节进度'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _OutlineList(outline: state.outline),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
+
+                  // 已收集的建议
+                  if (state.suggestions.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        _SectionLabel('已发现 ${state.suggestions.length} 条建议'),
+                        const Spacer(),
+                        Text(
+                          '实时更新中...',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Expanded(
+                      child: _SuggestionPreviewList(
+                        suggestions: state.suggestions.take(10).toList(),
+                      ),
+                    ),
+                  ] else
+                    const Spacer(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// Stage 3: Review (核心审阅)
+// ═══════════════════════════════════════════════════════
+
+class _ReviewStage extends ConsumerWidget {
+  const _ReviewStage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(polishProvider);
+    final notifier = ref.read(polishProvider.notifier);
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: Column(
+        children: [
+          FeatureHeader(
+            color: AppColors.success,
+            title: '审阅结果',
+            subtitle: '共 ${state.totalSuggestions} 条建议 | '
+                '已采纳 ${state.acceptedCount} | '
+                '已拒绝 ${state.rejectedCount} | '
+                '待审阅 ${state.pendingCount}',
+            showBackButton: true,
+            onBack: () => notifier.goBackToInput(),
+          ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final totalWidth = constraints.maxWidth;
+                if (totalWidth < 600) {
+                  return _buildNarrowLayout(state, notifier, context);
+                }
+                return _buildWideLayout(state, notifier, context);
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTab({
-    required IconData icon,
-    required String label,
-    required InputMode mode,
-  }) {
-    final isActive = activeMode == mode;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => onChanged(mode),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: 40,
-          decoration: BoxDecoration(
-            color: isActive ? AppColors.success : AppColors.surface,
-            borderRadius: mode == InputMode.upload
-                ? const BorderRadius.horizontal(
-                    left: Radius.circular(AppRadius.md))
-                : const BorderRadius.horizontal(
-                    right: Radius.circular(AppRadius.md)),
+  Widget _buildWideLayout(PolishState state, PolishNotifier notifier, BuildContext context) {
+    final filtered = state.filteredSuggestions;
+    return Row(
+      children: [
+        // 左侧 — 文档预览（60%）
+        Expanded(
+          flex: 6,
+          child: _DocumentPreview(
+            paragraphs: state.originalParagraphs,
+            suggestions: state.suggestions,
+            currentSuggestionIndex: state.currentSuggestionIndex >= 0
+                ? state.currentSuggestionIndex
+                : null,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 14, color: isActive ? Colors.white : AppColors.textSecondary),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: isActive ? Colors.white : AppColors.textSecondary,
+        ),
+        // 右侧 — 建议列表面板（40%）
+        Expanded(
+          flex: 4,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(left: BorderSide(color: AppColors.border)),
+            ),
+            child: _buildSuggestionPanel(state, notifier, context, filtered),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNarrowLayout(PolishState state, PolishNotifier notifier, BuildContext context) {
+    final filtered = state.filteredSuggestions;
+    return Column(
+      children: [
+        // 上方 — 建议列表（主区域）
+        Expanded(
+          flex: 5,
+          child: _buildSuggestionPanel(state, notifier, context, filtered),
+        ),
+        // 下方 — 文档预览（折叠预览）
+        Expanded(
+          flex: 3,
+          child: Container(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.border)),
+            ),
+            child: _DocumentPreview(
+              paragraphs: state.originalParagraphs,
+              suggestions: state.suggestions,
+              currentSuggestionIndex: state.currentSuggestionIndex >= 0
+                  ? state.currentSuggestionIndex
+                  : null,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSuggestionPanel(
+    PolishState state,
+    PolishNotifier notifier,
+    BuildContext context,
+    List<PolishSuggestion> filtered,
+  ) {
+    return Column(
+      children: [
+        _StatsBar(
+          total: state.totalSuggestions,
+          accepted: state.acceptedCount,
+          rejected: state.rejectedCount,
+          pending: state.pendingCount,
+        ),
+        _FilterBar(
+          filterCategory: state.filterCategory,
+          filterSeverity: state.filterSeverity,
+          onCategoryChanged: (c) => notifier.setFilterCategory(c),
+          onSeverityChanged: (s) => notifier.setFilterSeverity(s),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? const Center(child: Text('暂无匹配建议', style: AppTypography.caption))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+                  itemBuilder: (_, i) {
+                    final suggestion = filtered[i];
+                    return _SuggestionCard(
+                      suggestion: suggestion,
+                      onAccept: () => notifier.acceptSuggestion(suggestion.id),
+                      onReject: () => notifier.rejectSuggestion(suggestion.id),
+                      onTap: () => notifier.setCurrentSuggestionIndex(
+                        state.suggestions.indexOf(suggestion),
+                      ),
+                    );
+                  },
                 ),
-              ),
-            ],
+        ),
+        _BottomActionBar(
+          canUndo: state.canUndo,
+          canRedo: state.canRedo,
+          hasSourceFile: state.sourceFileUrl != null,
+          onUndo: () => notifier.undo(),
+          onRedo: () => notifier.redo(),
+          onAcceptAll: () => notifier.acceptAll(),
+          onRejectAll: () => notifier.rejectAll(),
+          onExport: (mode) => _doExport(context, notifier, mode),
+          onBack: () => notifier.goBackToInput(),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _doExport(
+    BuildContext context,
+    PolishNotifier notifier,
+    ExportMode mode,
+  ) async {
+    final scaffold = ScaffoldMessenger.of(context);
+    scaffold.showSnackBar(
+      const SnackBar(
+        content: Text('正在导出...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    try {
+      await notifier.exportDocument(mode);
+      if (context.mounted) {
+        scaffold.hideCurrentSnackBar();
+        scaffold.showSnackBar(
+          const SnackBar(
+            content: Text('导出成功'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        scaffold.hideCurrentSnackBar();
+        scaffold.showSnackBar(
+          SnackBar(content: Text('导出失败: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// 组件: Input Stage
+// ═══════════════════════════════════════════════════════
+
+class _InputModeTabs extends StatelessWidget {
+  final InputMode mode;
+  final ValueChanged<InputMode> onChanged;
+  const _InputModeTabs({required this.mode, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _ModeChip(label: '粘贴文本', selected: mode == InputMode.text, onTap: () => onChanged(InputMode.text)),
+        const SizedBox(width: AppSpacing.sm),
+        _ModeChip(label: '上传文件', selected: mode == InputMode.upload, onTap: () => onChanged(InputMode.upload)),
+      ],
+    );
+  }
+}
+
+class _ModeChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ModeChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.successBg : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: selected ? AppColors.success : AppColors.border),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.caption.copyWith(
+            color: selected ? AppColors.success : AppColors.textSecondary,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
       ),
@@ -216,57 +441,968 @@ class _InputModeTabs extends StatelessWidget {
   }
 }
 
-// ── Upload zone ──
-
 class _UploadZone extends StatelessWidget {
   final String? fileName;
-  final ValueChanged<String?> onFileSelected;
+  final int? fileSize;
+  final VoidCallback onPick;
+  const _UploadZone({this.fileName, this.fileSize, required this.onPick});
 
-  const _UploadZone({
-    this.fileName,
-    required this.onFileSelected,
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPick,
+      child: Container(
+        height: 160,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.border, width: 1.5),
+        ),
+        child: Center(
+          child: fileName != null
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.description_outlined, size: 36, color: AppColors.success),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(fileName!, style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
+                    if (fileSize != null)
+                      Text(
+                        '${(fileSize! / 1024).toStringAsFixed(1)} KB',
+                        style: AppTypography.small.copyWith(color: AppColors.textMuted),
+                      ),
+                  ],
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.cloud_upload_outlined, size: 36, color: AppColors.textMuted),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text('点击上传 .docx / .txt / .md 文件', style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TextInputArea extends StatelessWidget {
+  final String text;
+  final ValueChanged<String> onChanged;
+  const _TextInputArea({required this.text, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: TextField(
+        maxLines: 12,
+        onChanged: onChanged,
+        decoration: const InputDecoration(
+          hintText: '请粘贴需要审阅的文本内容...',
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.all(AppSpacing.lg),
+        ),
+      ),
+    );
+  }
+}
+
+class _DocTypePills extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+  const _DocTypePills({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: DocTypePill.defaults.map((pill) {
+          final isSelected = selected == pill.label;
+          return Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
+            child: GestureDetector(
+              onTap: () => onChanged(pill.label),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.primaryBg : AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
+                ),
+                child: Text(
+                  pill.label,
+                  style: AppTypography.small.copyWith(
+                    color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _LevelSelector extends StatelessWidget {
+  final PolishLevel selected;
+  final ValueChanged<PolishLevel> onChanged;
+  const _LevelSelector({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: PolishLevel.values.map((level) {
+        final isSelected = selected == level;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => onChanged(level),
+            child: Container(
+              margin: const EdgeInsets.only(right: AppSpacing.md),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.successBg : AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: isSelected ? AppColors.success : AppColors.border),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    level.label,
+                    style: AppTypography.body.copyWith(
+                      color: isSelected ? AppColors.success : AppColors.text,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    level.description,
+                    style: AppTypography.micro.copyWith(color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _StartButton extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onPressed;
+  const _StartButton({required this.enabled, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: ElevatedButton(
+        onPressed: enabled ? onPressed : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.success,
+          disabledBackgroundColor: AppColors.textMuted,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+        ),
+        child: Text(
+          '开始审阅',
+          style: AppTypography.button.copyWith(color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// 组件: Reviewing Stage
+// ═══════════════════════════════════════════════════════
+
+class _ProgressIndicator extends StatelessWidget {
+  final double progress;
+  final String message;
+  const _ProgressIndicator({required this.progress, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: LinearProgressIndicator(
+                  value: progress.clamp(0.0, 1.0),
+                  backgroundColor: AppColors.borderLight,
+                  color: AppColors.success,
+                  minHeight: 8,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Text(
+              '${(progress * 100).toInt()}%',
+              style: AppTypography.caption.copyWith(
+                color: AppColors.success,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(message, style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+      ],
+    );
+  }
+}
+
+class _OutlineList extends StatelessWidget {
+  final List<OutlineItem> outline;
+  const _OutlineList({required this.outline});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: outline.map((item) {
+        final statusIcon = item.status == 'reviewed'
+            ? const Icon(Icons.check_circle, size: 18, color: AppColors.success)
+            : item.status == 'reviewing'
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.success),
+                  )
+                : const Icon(Icons.circle_outlined, size: 18, color: AppColors.textMuted);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              statusIcon,
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  item.title,
+                  style: AppTypography.caption.copyWith(
+                    color: item.status == 'reviewed' ? AppColors.text : AppColors.textMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _SuggestionPreviewList extends StatelessWidget {
+  final List<PolishSuggestion> suggestions;
+  const _SuggestionPreviewList({required this.suggestions});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: suggestions.length,
+      itemBuilder: (_, i) {
+        final s = suggestions[i];
+        return ListTile(
+          dense: true,
+          leading: _CategoryIcon(category: s.category),
+          title: Text(
+            s.original,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.caption,
+          ),
+          subtitle: Text(
+            s.suggested,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.small.copyWith(color: AppColors.success),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// 组件: Review Stage
+// ═══════════════════════════════════════════════════════
+
+class _DocumentPreview extends StatelessWidget {
+  final List<SourceParagraph> paragraphs;
+  final List<PolishSuggestion> suggestions;
+  final int? currentSuggestionIndex;
+  const _DocumentPreview({
+    required this.paragraphs,
+    required this.suggestions,
+    this.currentSuggestionIndex,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (paragraphs.isEmpty) {
+      return const Center(
+        child: Text('暂无文档预览', style: AppTypography.body),
+      );
+    }
+
+    final acceptedMap = <int, List<PolishSuggestion>>{};
+    final pendingMap = <int, List<PolishSuggestion>>{};
+    final rejectedMap = <int, List<PolishSuggestion>>{};
+
+    for (final s in suggestions) {
+      if (s.status == 'accepted') {
+        acceptedMap.putIfAbsent(s.paragraphIndex, () => []).add(s);
+      } else if (s.status == 'pending') {
+        pendingMap.putIfAbsent(s.paragraphIndex, () => []).add(s);
+      } else if (s.status == 'rejected') {
+        rejectedMap.putIfAbsent(s.paragraphIndex, () => []).add(s);
+      }
+    }
+
+    final currentSuggestion =
+        currentSuggestionIndex != null && currentSuggestionIndex! < suggestions.length
+            ? suggestions[currentSuggestionIndex!]
+            : null;
+
+    return Container(
+      color: AppColors.surface,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        itemCount: paragraphs.length,
+        itemBuilder: (_, i) {
+          final para = paragraphs[i];
+          final isCurrentFocus = currentSuggestion?.paragraphIndex == i;
+          final hasPending = pendingMap.containsKey(i);
+
+          Color bgColor = Colors.transparent;
+          if (isCurrentFocus) {
+            bgColor = AppColors.infoBg;
+          } else if (hasPending) {
+            bgColor = const Color(0x0A2563EB);
+          }
+
+          // 构建富文本：已采纳→替换文本绿色、已拒绝→原文删除线灰色、待审阅→原文蓝色
+          final acceptedInThisPara = acceptedMap[i] ?? [];
+          final rejectedInThisPara = rejectedMap[i] ?? [];
+          final pendingInThisPara = pendingMap[i] ?? [];
+
+          String text = para.text;
+          // 先应用已采纳替换
+          for (final s in acceptedInThisPara) {
+            text = text.replaceFirst(s.original, s.suggested);
+          }
+
+          // 构建 TextSpan 标记 rejected 和 pending 区域
+          final spans = _buildParagraphSpans(
+            text,
+            pendingInThisPara,
+            rejectedInThisPara,
+          );
+
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: RichText(
+              text: TextSpan(
+                style: AppTypography.body.copyWith(height: 1.7, color: AppColors.text),
+                children: spans,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<TextSpan> _buildParagraphSpans(
+    String text,
+    List<PolishSuggestion> pending,
+    List<PolishSuggestion> rejected,
+  ) {
+    if (pending.isEmpty && rejected.isEmpty) {
+      return [TextSpan(text: text)];
+    }
+
+    // 标记所有需要特殊渲染的区间
+    final marks = <_TextMark>[];
+    for (final s in rejected) {
+      final idx = text.indexOf(s.original);
+      if (idx >= 0) marks.add(_TextMark(idx, idx + s.original.length, 'rejected'));
+    }
+    for (final s in pending) {
+      final idx = text.indexOf(s.original);
+      if (idx >= 0) marks.add(_TextMark(idx, idx + s.original.length, 'pending'));
+    }
+    if (marks.isEmpty) return [TextSpan(text: text)];
+
+    marks.sort((a, b) => a.start.compareTo(b.start));
+
+    final spans = <TextSpan>[];
+    int pos = 0;
+    for (final m in marks) {
+      if (m.start > pos) {
+        spans.add(TextSpan(text: text.substring(pos, m.start)));
+      }
+      final segment = text.substring(m.start, m.end);
+      if (m.type == 'rejected') {
+        spans.add(TextSpan(
+          text: segment,
+          style: const TextStyle(
+            decoration: TextDecoration.lineThrough,
+            color: AppColors.textMuted,
+          ),
+        ));
+      } else {
+        spans.add(TextSpan(
+          text: segment,
+          style: const TextStyle(
+            backgroundColor: Color(0x332563EB),
+            color: AppColors.primary,
+          ),
+        ));
+      }
+      pos = m.end;
+    }
+    if (pos < text.length) {
+      spans.add(TextSpan(text: text.substring(pos)));
+    }
+    return spans;
+  }
+}
+
+class _TextMark {
+  final int start;
+  final int end;
+  final String type;
+  const _TextMark(this.start, this.end, this.type);
+}
+
+class _StatsBar extends StatelessWidget {
+  final int total, accepted, rejected, pending;
+  const _StatsBar({
+    required this.total,
+    required this.accepted,
+    required this.rejected,
+    required this.pending,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _StatChip(label: '共 $total 条', color: AppColors.primary),
+          _StatChip(label: '采纳 $accepted', color: AppColors.success),
+          _StatChip(label: '拒绝 $rejected', color: AppColors.error),
+          _StatChip(label: '待审 $pending', color: AppColors.warn),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _StatChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.micro.copyWith(color: color, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _FilterBar extends StatelessWidget {
+  final String? filterCategory;
+  final String? filterSeverity;
+  final ValueChanged<String?> onCategoryChanged;
+  final ValueChanged<String?> onSeverityChanged;
+
+  const _FilterBar({
+    this.filterCategory,
+    this.filterSeverity,
+    required this.onCategoryChanged,
+    required this.onSeverityChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = ['grammar', 'style', 'terminology', 'logic', 'format'];
+    final categoryLabels = {
+      'grammar': '语法',
+      'style': '风格',
+      'terminology': '术语',
+      'logic': '逻辑',
+      'format': '格式',
+    };
+    final severities = ['error', 'warning', 'suggestion'];
+    final severityLabels = {
+      'error': '错误',
+      'warning': '警告',
+      'suggestion': '建议',
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 分类筛选
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _FilterChip(
+                  label: '全部',
+                  selected: filterCategory == null,
+                  onTap: () => onCategoryChanged(null),
+                ),
+                ...categories.map((c) => Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: _FilterChip(
+                    label: categoryLabels[c] ?? c,
+                    selected: filterCategory == c,
+                    onTap: () => onCategoryChanged(filterCategory == c ? null : c),
+                  ),
+                )),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          // 严重程度筛选
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _FilterChip(
+                  label: '全部',
+                  selected: filterSeverity == null,
+                  onTap: () => onSeverityChanged(null),
+                ),
+                ...severities.map((s) => Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: _FilterChip(
+                    label: severityLabels[s] ?? s,
+                    selected: filterSeverity == s,
+                    onTap: () => onSeverityChanged(filterSeverity == s ? null : s),
+                  ),
+                )),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _FilterChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primaryBg : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+            width: 0.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.micro.copyWith(
+            color: selected ? AppColors.primary : AppColors.textMuted,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestionCard extends StatelessWidget {
+  final PolishSuggestion suggestion;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+  final VoidCallback onTap;
+
+  const _SuggestionCard({
+    required this.suggestion,
+    required this.onAccept,
+    required this.onReject,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isPending = suggestion.status == 'pending';
+    final isAccepted = suggestion.status == 'accepted';
+    final isRejected = suggestion.status == 'rejected';
+
+    Color borderColor = AppColors.border;
+    if (isAccepted) borderColor = AppColors.success;
+    if (isRejected) borderColor = AppColors.textMuted;
+    if (suggestion.status == 'conflict') borderColor = AppColors.warn;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: borderColor, width: isPending ? 1.5 : 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 标签行
+            Row(
+              children: [
+                _CategoryIcon(category: suggestion.category),
+                const SizedBox(width: 6),
+                _SeverityBadge(severity: suggestion.severity),
+                const Spacer(),
+                if (isAccepted)
+                  const Icon(Icons.check_circle, size: 16, color: AppColors.success),
+                if (isRejected)
+                  const Icon(Icons.cancel, size: 16, color: AppColors.textMuted),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+
+            // 原文
+            Text(
+              '原文: ${suggestion.original}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption.copyWith(
+                decoration: isRejected ? TextDecoration.lineThrough : null,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 4),
+
+            // 建议
+            Text(
+              '建议: ${suggestion.suggested}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption.copyWith(color: AppColors.success),
+            ),
+            const SizedBox(height: 4),
+
+            // 原因
+            if (suggestion.reason.isNotEmpty)
+              Text(
+                suggestion.reason,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.small.copyWith(color: AppColors.textMuted),
+              ),
+
+            // 操作按钮（仅 pending 时显示）
+            if (isPending) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _ActionButton(
+                    label: '拒绝',
+                    icon: Icons.close,
+                    color: AppColors.textMuted,
+                    onPressed: onReject,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  _ActionButton(
+                    label: '采纳',
+                    icon: Icons.check,
+                    color: AppColors.success,
+                    onPressed: onAccept,
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryIcon extends StatelessWidget {
+  final String category;
+  const _CategoryIcon({required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    final config = {
+      'grammar': (Icons.spellcheck, AppColors.error),
+      'style': (Icons.brush, AppColors.purple),
+      'terminology': (Icons.menu_book, AppColors.cta),
+      'logic': (Icons.psychology, AppColors.primary),
+      'format': (Icons.format_align_left, AppColors.info),
+    };
+    final (icon, color) = config[category] ?? (Icons.edit_note, AppColors.textMuted);
+    return Icon(icon, size: 14, color: color);
+  }
+}
+
+class _SeverityBadge extends StatelessWidget {
+  final String severity;
+  const _SeverityBadge({required this.severity});
+
+  @override
+  Widget build(BuildContext context) {
+    final config = {
+      'error': ('错误', AppColors.error),
+      'warning': ('警告', AppColors.warn),
+      'suggestion': ('建议', AppColors.info),
+    };
+    final (label, color) = config[severity] ?? ('建议', AppColors.textMuted);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(label, style: AppTypography.micro.copyWith(color: color, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        // 模拟文件选择，实际项目中使用 file_picker
-        onFileSelected('技术开发合同_v1.2.docx');
-      },
+      onTap: onPressed,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(
-            AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
-        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          border: Border.all(
-            color: fileName != null ? AppColors.success : AppColors.border,
-            width: 2,
-            style: BorderStyle.solid,
-          ),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          color: fileName != null ? AppColors.successBg : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
-        child: Column(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.cloud_upload_outlined,
-              size: 36,
-              color: fileName != null ? AppColors.success : AppColors.textMuted,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              fileName ?? '点击上传文档',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: fileName != null ? AppColors.success : AppColors.text,
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(label, style: AppTypography.small.copyWith(color: color, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomActionBar extends StatelessWidget {
+  final bool canUndo;
+  final bool canRedo;
+  final bool hasSourceFile;
+  final VoidCallback onUndo;
+  final VoidCallback onRedo;
+  final VoidCallback onAcceptAll;
+  final VoidCallback onRejectAll;
+  final void Function(ExportMode) onExport;
+  final VoidCallback onBack;
+
+  const _BottomActionBar({
+    required this.canUndo,
+    required this.canRedo,
+    required this.hasSourceFile,
+    required this.onUndo,
+    required this.onRedo,
+    required this.onAcceptAll,
+    required this.onRejectAll,
+    required this.onExport,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.border)),
+        color: AppColors.surface,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 批量操作
+          Row(
+            children: [
+              _SmallButton(label: '全部采纳', onTap: onAcceptAll, color: AppColors.success),
+              const SizedBox(width: 6),
+              _SmallButton(label: '全部拒绝', onTap: onRejectAll, color: AppColors.error),
+              const Spacer(),
+              _SmallButton(label: '撤销', onTap: canUndo ? onUndo : null, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              _SmallButton(label: '重做', onTap: canRedo ? onRedo : null, color: AppColors.textSecondary),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // 导出按钮
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _ExportButton(
+                label: '专业排版导出',
+                icon: Icons.auto_fix_high,
+                onTap: () => onExport(ExportMode.professional),
+                primary: true,
               ),
+              if (hasSourceFile) ...[
+                _ExportButton(
+                  label: '原格式',
+                  icon: Icons.description,
+                  onTap: () => onExport(ExportMode.original),
+                  primary: false,
+                ),
+                _ExportButton(
+                  label: '修订模式(Beta)',
+                  icon: Icons.track_changes,
+                  onTap: () => onExport(ExportMode.trackChanges),
+                  primary: false,
+                ),
+              ],
+              _ExportButton(
+                label: '审阅报告',
+                icon: Icons.assessment,
+                onTap: () => onExport(ExportMode.report),
+                primary: false,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // 返回
+          Center(
+            child: TextButton(
+              onPressed: onBack,
+              child: Text('返回输入', style: AppTypography.small.copyWith(color: AppColors.textMuted)),
             ),
-            const SizedBox(height: 4),
-            const Text(
-              '支持 .docx .pdf .txt .md，最大 20MB',
-              style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onTap;
+  final Color color;
+  const _SmallButton({required this.label, this.onTap, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        label,
+        style: AppTypography.small.copyWith(
+          color: onTap != null ? color : AppColors.textMuted,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _ExportButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool primary;
+  const _ExportButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.primary = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        decoration: BoxDecoration(
+          color: primary ? AppColors.success : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: primary ? AppColors.success : AppColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: primary ? Colors.white : AppColors.textSecondary),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.small.copyWith(
+                  color: primary ? Colors.white : AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
         ),
@@ -275,55 +1411,9 @@ class _UploadZone extends StatelessWidget {
   }
 }
 
-// ── Text input area ──
-
-class _TextInputArea extends StatelessWidget {
-  final ValueChanged<String> onChanged;
-
-  const _TextInputArea({required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(
-          AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
-      child: TextField(
-        maxLines: 12,
-        onChanged: onChanged,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          height: 1.6,
-        ),
-        decoration: InputDecoration(
-          hintText: '粘贴需要润色的文本内容...\n\n甲方和乙方经友好协商，甲方需要给乙方付款，就智慧园区管理平台开发项目达成如下协议：',
-          hintStyle: const TextStyle(
-            fontSize: 14,
-            color: AppColors.textMuted,
-            height: 1.6,
-          ),
-          filled: true,
-          fillColor: AppColors.surface,
-          contentPadding: const EdgeInsets.all(12),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            borderSide: const BorderSide(color: AppColors.border, width: 1.5),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            borderSide: const BorderSide(color: AppColors.border, width: 1.5),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            borderSide: const BorderSide(color: AppColors.success, width: 1.5),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Section label ──
+// ═══════════════════════════════════════════════════════
+// 共享组件
+// ═══════════════════════════════════════════════════════
 
 class _SectionLabel extends StatelessWidget {
   final String text;
@@ -331,807 +1421,30 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.sm),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textMuted,
-        ),
-      ),
-    );
+    return Text(text, style: AppTypography.h3);
   }
 }
 
-// ── Doc type pills ──
-
-class _DocTypePills extends StatelessWidget {
-  final String selected;
-  final ValueChanged<String> onChanged;
-
-  const _DocTypePills({
-    required this.selected,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: Row(
-        children: DocTypePill.defaults.map((pill) {
-          final isActive = selected == pill.label;
-          return Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: GestureDetector(
-              onTap: () => onChanged(pill.label),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                decoration: BoxDecoration(
-                  color: isActive ? AppColors.success : AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(
-                    color: isActive ? AppColors.success : AppColors.border,
-                    width: 1.5,
-                  ),
-                ),
-                constraints: const BoxConstraints(minHeight: 36),
-                child: Center(
-                  child: Text(
-                    pill.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isActive ? Colors.white : AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-// ── Level selector ──
-
-class _LevelSelector extends StatelessWidget {
-  final PolishLevel selectedLevel;
-  final ValueChanged<PolishLevel> onChanged;
-
-  const _LevelSelector({
-    required this.selectedLevel,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: Row(
-        children: PolishLevel.values.map((level) {
-          final isSelected = level == selectedLevel;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(level),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.successBg : AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(
-                    color: isSelected ? AppColors.success : AppColors.border,
-                    width: 1.5,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      level.label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: isSelected ? AppColors.success : AppColors.text,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      level.description,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-// ── Start button ──
-
-class _StartButton extends StatelessWidget {
-  final bool isLoading;
-  final VoidCallback onPressed;
-
-  const _StartButton({
-    required this.isLoading,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 44,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.success,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: AppColors.success.withValues(alpha: 0.6),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          elevation: 0,
-        ),
-        child: isLoading
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.edit_note, size: 18),
-                  SizedBox(width: 6),
-                  Text(
-                    '开始润色',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════
-// Stage 2: Result
-// ═══════════════════════════════════════════════════════
-
-class _ResultStage extends ConsumerWidget {
-  const _ResultStage({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(polishProvider);
-    final notifier = ref.read(polishProvider.notifier);
-    final result = state.result;
-
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: Column(
-        children: [
-          // Green result header
-          FeatureHeader(
-            color: AppColors.success,
-            title: '润色完成',
-            subtitle: result != null
-                ? '${result.title} · ${result.level.label}润色 · 修改 ${result.changeCount} 处'
-                : '',
-            showBackButton: true,
-            onBack: () => notifier.rePolish(),
-          ),
-
-          // Steps indicator
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppColors.success,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                Container(
-                  width: 32,
-                  height: 2,
-                  color: AppColors.success,
-                ),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppColors.success,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(AppSpacing.lg, 4, AppSpacing.lg, 0),
-            child: Text(
-              '修订对比 · 选择导出格式',
-              style: TextStyle(
-                fontSize: 11,
-                color: AppColors.textMuted,
-              ),
-            ),
-          ),
-
-          // Content
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Compare header
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg, AppSpacing.sm + 4, AppSpacing.lg, AppSpacing.xs),
-                    child: Row(
-                      children: [
-                        const Text(
-                          '修订对比',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.text,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (result != null) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.successBg,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${result.acceptedCount} 采纳',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.success,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.warnBg,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${result.pendingCount} 待定',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.warn,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-
-                  // Compare card
-                  _CompareCard(
-                    activeTab: state.compareTab,
-                    result: result,
-                    streamingText: state.streamingText,
-                    onTabChanged: (tab) => notifier.setCompareTab(tab),
-                  ),
-
-                  // Export section
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(
-                        AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xs),
-                    child: Text(
-                      '选择导出格式',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.text,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.successBg,
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(color: AppColors.success, width: 1.5),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.description_outlined, size: 20, color: AppColors.success),
-                          SizedBox(width: 8),
-                          Text('Word 文档 (.docx)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text)),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Action buttons
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 44,
-                            child: OutlinedButton(
-                              onPressed: () => notifier.rePolish(),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: AppColors.border),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(AppRadius.md),
-                                ),
-                                backgroundColor: AppColors.surface,
-                              ),
-                              child: const Text(
-                                '重新润色',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.text,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 2,
-                          child: SizedBox(
-                            height: 44,
-                            child: ElevatedButton.icon(
-                              onPressed: () => notifier.exportResult(),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.success,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(AppRadius.md),
-                                ),
-                                elevation: 0,
-                              ),
-                              icon: const Icon(Icons.download, size: 16),
-                              label: const Text(
-                                '导出文档',
-                                style: TextStyle(
-                                    fontSize: 14, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Compare card with tabs ──
-
-class _CompareCard extends StatelessWidget {
-  final CompareTab activeTab;
-  final PolishResult? result;
-  final String streamingText;
-  final ValueChanged<CompareTab> onTabChanged;
-
-  const _CompareCard({
-    required this.activeTab,
-    this.result,
-    this.streamingText = '',
-    required this.onTabChanged,
-  });
+class _ErrorMessage extends StatelessWidget {
+  final String message;
+  const _ErrorMessage({required this.message});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.errorBg,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
       ),
-      child: Column(
+      child: Row(
         children: [
-          // Tabs
-          Container(
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Row(
-              children: CompareTab.values.map((tab) {
-                final isActive = tab == activeTab;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => onTabChanged(tab),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isActive ? AppColors.successBg : null,
-                        border: isActive
-                            ? const Border(
-                                bottom: BorderSide(
-                                    color: AppColors.success, width: 2))
-                            : null,
-                      ),
-                      child: Center(
-                        child: Text(
-                          tab.label,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isActive
-                                ? AppColors.success
-                                : AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-
-          // Body
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: _buildBody(),
+          const Icon(Icons.error_outline, size: 18, color: AppColors.error),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(message, style: AppTypography.caption.copyWith(color: AppColors.error)),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (result == null) return const SizedBox.shrink();
-
-    switch (activeTab) {
-      case CompareTab.diff:
-        return _buildDiffView();
-      case CompareTab.polished:
-        return _buildPolishedView();
-      case CompareTab.original:
-        return _buildOriginalView();
-    }
-  }
-
-  Widget _buildDiffView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: result!.paragraphs.map((para) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _buildRichText(para.segments, isDiff: true),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildPolishedView() {
-    // 优先使用 polishedText 整体显示，其次从 diff 段落提取
-    if (result!.polishedText != null && result!.polishedText!.isNotEmpty) {
-      return Text(
-        result!.polishedText!,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          height: 1.8,
-          color: AppColors.text,
-        ),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: result!.paragraphs.map((para) {
-        final text = para.segments
-            .where((s) => s.type != 'delete')
-            .map((s) => s.text)
-            .join();
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              height: 1.8,
-              color: AppColors.text,
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildOriginalView() {
-    // 优先使用 originalText 整体显示，其次从 diff 段落提取
-    if (result!.originalText != null && result!.originalText!.isNotEmpty) {
-      return Text(
-        result!.originalText!,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          height: 1.8,
-          color: AppColors.text,
-        ),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: result!.paragraphs.map((para) {
-        final text = para.segments
-            .where((s) => s.type != 'insert' && s.type != 'highlight')
-            .map((s) => s.text)
-            .join();
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              height: 1.8,
-              color: AppColors.text,
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildRichText(List<DiffSegment> segments, {bool isDiff = false}) {
-    return RichText(
-      text: TextSpan(
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          height: 1.8,
-          color: AppColors.text,
-        ),
-        children: segments.map((seg) {
-          switch (seg.type) {
-            case 'delete':
-              return TextSpan(
-                text: seg.text,
-                style: TextStyle(
-                  decoration: TextDecoration.lineThrough,
-                  color: AppColors.error.withValues(alpha: 0.6),
-                ),
-              );
-            case 'insert':
-              return TextSpan(
-                text: seg.text,
-                style: const TextStyle(
-                  color: AppColors.success,
-                  fontWeight: FontWeight.w500,
-                ),
-              );
-            case 'highlight':
-              return TextSpan(
-                text: seg.text,
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w500,
-                  backgroundColor: AppColors.primaryBg,
-                ),
-              );
-            default:
-              return TextSpan(text: seg.text);
-          }
-        }).toList(),
-      ),
-    );
-  }
-}
-
-// ── Export format selector ──
-
-class _ExportFormatSelector extends StatelessWidget {
-  final ExportFormat selectedFormat;
-  final ValueChanged<ExportFormat> onChanged;
-
-  const _ExportFormatSelector({
-    required this.selectedFormat,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: Row(
-        children: ExportFormat.values.map((fmt) {
-          final isSelected = fmt == selectedFormat;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(fmt),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 5),
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.successBg : AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(
-                    color: isSelected ? AppColors.success : AppColors.border,
-                    width: 1.5,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    _FormatIcon(format: fmt, isSelected: isSelected),
-                    const SizedBox(height: 6),
-                    Text(
-                      fmt.label,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.text,
-                      ),
-                    ),
-                    Text(
-                      fmt.extension,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _FormatIcon extends StatelessWidget {
-  final ExportFormat format;
-  final bool isSelected;
-  const _FormatIcon({required this.format, required this.isSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    final config = _iconConfig();
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: config.bgColor,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-      ),
-      child: Icon(config.icon, size: 20, color: config.iconColor),
-    );
-  }
-
-  _IconConfig _iconConfig() {
-    switch (format) {
-      case ExportFormat.docx:
-        return const _IconConfig(
-          icon: Icons.description_outlined,
-          bgColor: AppColors.successBg,
-          iconColor: AppColors.success,
-        );
-      case ExportFormat.pdf:
-        return const _IconConfig(
-          icon: Icons.picture_as_pdf_outlined,
-          bgColor: AppColors.errorBg,
-          iconColor: AppColors.error,
-        );
-      case ExportFormat.html:
-        return const _IconConfig(
-          icon: Icons.code,
-          bgColor: AppColors.ctaBg,
-          iconColor: AppColors.cta,
-        );
-    }
-  }
-}
-
-class _IconConfig {
-  final IconData icon;
-  final Color bgColor;
-  final Color iconColor;
-  const _IconConfig({
-    required this.icon,
-    required this.bgColor,
-    required this.iconColor,
-  });
-}
-
-class _PolishModeChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _PolishModeChip({
-    required this.label,
-    required this.icon,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          decoration: BoxDecoration(
-            color: isActive ? AppColors.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            boxShadow: isActive
-                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 2, offset: const Offset(0, 1))]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 14, color: isActive ? AppColors.success : AppColors.textMuted),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                  color: isActive ? AppColors.success : AppColors.textMuted,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

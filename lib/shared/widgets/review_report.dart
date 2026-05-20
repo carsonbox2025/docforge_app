@@ -8,12 +8,16 @@ class ReviewReportCard extends StatelessWidget {
   final bool passed;
   final List<ReviewFinding> findings;
   final int fixedCount;
+  final int? selectedIndex;
+  final void Function(int index, ReviewFinding finding)? onFindingTap;
 
   const ReviewReportCard({
     super.key,
     required this.passed,
     required this.findings,
     this.fixedCount = 0,
+    this.selectedIndex,
+    this.onFindingTap,
   });
 
   @override
@@ -81,14 +85,26 @@ class ReviewReportCard extends StatelessWidget {
               ],
             ),
           ),
+          if (onFindingTap != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Text(
+                '点击条目可在文档中定位',
+                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+              ),
+            ),
           // Findings list
-          ...findings.take(5).map((f) => _buildFindingItem(f)),
-          if (findings.length > 5)
+          ...List.generate(findings.length > 10 ? 10 : findings.length, (i) {
+            return _buildFindingItem(findings[i], i);
+          }),
+          if (findings.length > 10)
             Padding(
               padding: const EdgeInsets.all(12),
-              child: Text(
-                '还有 ${findings.length - 5} 项...',
-                style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              child: Center(
+                child: Text(
+                  '共 ${findings.length} 项，向下滚动查看更多',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                ),
               ),
             ),
         ],
@@ -125,37 +141,55 @@ class ReviewReportCard extends StatelessWidget {
     );
   }
 
-  Widget _buildFindingItem(ReviewFinding finding) {
+  Widget _buildFindingItem(ReviewFinding finding, int index) {
     final isError = finding.level == ReviewLevel.error;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.borderLight)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(
-              isError ? Icons.error : Icons.warning_amber,
-              size: 16,
-              color: isError ? AppColors.error : AppColors.cta,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              finding.message,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: isError ? AppColors.error : AppColors.textSecondary,
-                height: 1.4,
+    final isSelected = selectedIndex == index;
+    final isTappable = onFindingTap != null;
+
+    return GestureDetector(
+      onTap: isTappable ? () => onFindingTap!(index, finding) : null,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primaryBg : null,
+          border: const Border(bottom: BorderSide(color: AppColors.borderLight)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(
+                isError ? Icons.error : Icons.warning_amber,
+                size: 16,
+                color: isError ? AppColors.error : AppColors.cta,
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                finding.message,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isError ? AppColors.error : AppColors.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            if (isTappable)
+              Padding(
+                padding: const EdgeInsets.only(left: 8, top: 2),
+                child: Icon(
+                  isSelected ? Icons.close : Icons.open_in_new,
+                  size: 14,
+                  color: isSelected ? AppColors.primary : AppColors.textMuted,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
