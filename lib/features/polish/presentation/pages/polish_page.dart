@@ -205,12 +205,41 @@ class _ReviewingStage extends ConsumerWidget {
 // Stage 3: Review (核心审阅)
 // ═══════════════════════════════════════════════════════
 
-class _ReviewStage extends ConsumerWidget {
+class _ReviewStage extends ConsumerStatefulWidget {
   const _ReviewStage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(polishProvider);
+  ConsumerState<_ReviewStage> createState() => _ReviewStageState();
+}
+
+class _ReviewStageState extends ConsumerState<_ReviewStage> {
+  final ScrollController _previewScrollController = ScrollController();
+  static const double _wideBreakpoint = 600;
+
+  @override
+  void dispose() {
+    _previewScrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSuggestionParagraph(int? paragraphIndex) {
+    if (paragraphIndex == null || !_previewScrollController.hasClients) return;
+    // 每段约 60px 高度（含 padding），定位到对应位置
+    final targetOffset = paragraphIndex * 60.0;
+    _previewScrollController.animateTo(
+      targetOffset.clamp(0.0, _previewScrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 精细订阅：仅布局相关的字段
+    final showPreview = ref.watch(polishProvider.select((s) => s.currentSuggestionIndex >= 0));
+    final stats = ref.watch(polishProvider.select((s) => (
+      s.totalSuggestions, s.acceptedCount, s.rejectedCount, s.pendingCount,
+    )));
     final notifier = ref.read(polishProvider.notifier);
 
     return Scaffold(
@@ -220,21 +249,23 @@ class _ReviewStage extends ConsumerWidget {
           FeatureHeader(
             color: AppColors.success,
             title: '审阅结果',
-            subtitle: '共 ${state.totalSuggestions} 条建议 | '
-                '已采纳 ${state.acceptedCount} | '
-                '已拒绝 ${state.rejectedCount} | '
-                '待审阅 ${state.pendingCount}',
+            subtitle: '共 ${stats.$1} 条建议 | '
+                '已采纳 ${stats.$2} | '
+                '已拒绝 ${stats.$3} | '
+                '待审阅 ${stats.$4}',
             showBackButton: true,
             onBack: () => notifier.goBackToInput(),
           ),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final totalWidth = constraints.maxWidth;
-                if (totalWidth < 600) {
-                  return _buildNarrowLayout(state, notifier, context);
-                }
-                return _buildWideLayout(state, notifier, context);
+                final isWide = constraints.maxWidth >= _wideBreakpoint;
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: isWide
+                      ? _buildWideLayout(showPreview)
+                      : _buildNarrowLayout(showPreview),
+                );
               },
             ),
           ),
@@ -243,82 +274,183 @@ class _ReviewStage extends ConsumerWidget {
     );
   }
 
-  Widget _buildWideLayout(PolishState state, PolishNotifier notifier, BuildContext context) {
-    final filtered = state.filteredSuggestions;
-    return Row(
-      children: [
-        // 左侧 — 文档预览（60%）
-        Expanded(
-          flex: 6,
-          child: _DocumentPreview(
-            paragraphs: state.originalParagraphs,
-            suggestions: state.suggestions,
-            currentSuggestionIndex: state.currentSuggestionIndex >= 0
-                ? state.currentSuggestionIndex
-                : null,
-          ),
-        ),
-        // 右侧 — 建议列表面板（40%）
-        Expanded(
-          flex: 4,
-          child: Container(
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              border: Border(left: BorderSide(color: AppColors.border)),
+  Widget _buildWideLayout(bool showPreview) {
+    if (showPreview) {
+      return Row(
+        key: const ValueKey('wide-split'),
+        children: [
+          Expanded(flex: 6, child: _buildPreviewWithClose()),
+          Expanded(
+            flex: 4,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                border: Border(left: BorderSide(color: AppColors.border)),
+              ),
+              child: _ReviewSuggestionPanel(scrollToParagraph: _scrollToSuggestionParagraph),
             ),
-            child: _buildSuggestionPanel(state, notifier, context, filtered),
           ),
+        ],
+      );
+    }
+
+    return SingleChildScrollView(
+      key: const ValueKey('wide-only'),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          _buildHintBanner(),
+          _ReviewSuggestionPanel(scrollToParagraph: _scrollToSuggestionParagraph),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNarrowLayout(bool showPreview) {
+    if (showPreview) {
+      return Column(
+        key: const ValueKey('narrow-split'),
+        children: [
+          Expanded(
+            flex: 5,
+            child: _ReviewSuggestionPanel(scrollToParagraph: _scrollToSuggestionParagraph),
+          ),
+          Expanded(
+            flex: 3,
+            child: Container(
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: AppColors.border)),
+              ),
+              child: _buildPreviewWithClose(),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      key: const ValueKey('narrow-only'),
+      children: [
+        _buildHintBanner(),
+        Expanded(
+          child: _ReviewSuggestionPanel(scrollToParagraph: _scrollToSuggestionParagraph),
         ),
       ],
     );
   }
 
-  Widget _buildNarrowLayout(PolishState state, PolishNotifier notifier, BuildContext context) {
-    final filtered = state.filteredSuggestions;
+  Widget _buildHintBanner() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.touch_app, size: 16, color: AppColors.primary),
+          SizedBox(width: 8),
+          Text(
+            '点击建议条目可预览文档中对应位置',
+            style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewWithClose() {
+    final notifier = ref.read(polishProvider.notifier);
+    // 仅订阅预览所需数据
+    final currentIndex = ref.watch(polishProvider.select((s) => s.currentSuggestionIndex));
+    final previewData = ref.watch(polishProvider.select((s) => (
+      s.originalParagraphs,
+      s.suggestions,
+    )));
+
     return Column(
       children: [
-        // 上方 — 建议列表（主区域）
-        Expanded(
-          flex: 5,
-          child: _buildSuggestionPanel(state, notifier, context, filtered),
+        Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            border: Border(bottom: BorderSide(color: AppColors.border)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.find_in_page, size: 14, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text('文档定位', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              ),
+              GestureDetector(
+                onTap: () => notifier.setCurrentSuggestionIndex(-1),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceHover,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.close, size: 12, color: AppColors.textSecondary),
+                      SizedBox(width: 4),
+                      Text('关闭预览', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        // 下方 — 文档预览（折叠预览）
         Expanded(
-          flex: 3,
-          child: Container(
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: AppColors.border)),
-            ),
-            child: _DocumentPreview(
-              paragraphs: state.originalParagraphs,
-              suggestions: state.suggestions,
-              currentSuggestionIndex: state.currentSuggestionIndex >= 0
-                  ? state.currentSuggestionIndex
-                  : null,
-            ),
+          child: _DocumentPreview(
+            scrollController: _previewScrollController,
+            paragraphs: previewData.$1,
+            suggestions: previewData.$2,
+            currentSuggestionIndex: currentIndex >= 0 ? currentIndex : null,
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildSuggestionPanel(
-    PolishState state,
-    PolishNotifier notifier,
-    BuildContext context,
-    List<PolishSuggestion> filtered,
-  ) {
+/// 独立的建议面板组件 — 精细订阅，避免整体重建
+class _ReviewSuggestionPanel extends ConsumerWidget {
+  final void Function(int? paragraphIndex) scrollToParagraph;
+  const _ReviewSuggestionPanel({required this.scrollToParagraph});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(polishProvider.select((s) => (
+      s.totalSuggestions, s.acceptedCount, s.rejectedCount, s.pendingCount,
+    )));
+    final filterState = ref.watch(polishProvider.select((s) => (
+      s.filterCategory, s.filterSeverity,
+    )));
+    final filtered = ref.watch(polishProvider.select((s) => s.filteredSuggestions));
+    final actionState = ref.watch(polishProvider.select((s) => (
+      s.canUndo, s.canRedo, s.sourceFileUrl != null,
+    )));
+    final notifier = ref.read(polishProvider.notifier);
+
     return Column(
       children: [
         _StatsBar(
-          total: state.totalSuggestions,
-          accepted: state.acceptedCount,
-          rejected: state.rejectedCount,
-          pending: state.pendingCount,
+          total: stats.$1,
+          accepted: stats.$2,
+          rejected: stats.$3,
+          pending: stats.$4,
         ),
         _FilterBar(
-          filterCategory: state.filterCategory,
-          filterSeverity: state.filterSeverity,
+          filterCategory: filterState.$1,
+          filterSeverity: filterState.$2,
           onCategoryChanged: (c) => notifier.setFilterCategory(c),
           onSeverityChanged: (s) => notifier.setFilterSeverity(s),
         ),
@@ -335,17 +467,19 @@ class _ReviewStage extends ConsumerWidget {
                       suggestion: suggestion,
                       onAccept: () => notifier.acceptSuggestion(suggestion.id),
                       onReject: () => notifier.rejectSuggestion(suggestion.id),
-                      onTap: () => notifier.setCurrentSuggestionIndex(
-                        state.suggestions.indexOf(suggestion),
-                      ),
+                      onTap: () {
+                        final idx = ref.read(polishProvider).suggestions.indexOf(suggestion);
+                        notifier.setCurrentSuggestionIndex(idx);
+                        scrollToParagraph(suggestion.paragraphIndex);
+                      },
                     );
                   },
                 ),
         ),
         _BottomActionBar(
-          canUndo: state.canUndo,
-          canRedo: state.canRedo,
-          hasSourceFile: state.sourceFileUrl != null,
+          canUndo: actionState.$1,
+          canRedo: actionState.$2,
+          hasSourceFile: actionState.$3,
           onUndo: () => notifier.undo(),
           onRedo: () => notifier.redo(),
           onAcceptAll: () => notifier.acceptAll(),
@@ -364,20 +498,14 @@ class _ReviewStage extends ConsumerWidget {
   ) async {
     final scaffold = ScaffoldMessenger.of(context);
     scaffold.showSnackBar(
-      const SnackBar(
-        content: Text('正在导出...'),
-        duration: Duration(seconds: 1),
-      ),
+      const SnackBar(content: Text('正在导出...'), duration: Duration(seconds: 1)),
     );
     try {
       await notifier.exportDocument(mode);
       if (context.mounted) {
         scaffold.hideCurrentSnackBar();
         scaffold.showSnackBar(
-          const SnackBar(
-            content: Text('导出成功'),
-            backgroundColor: AppColors.success,
-          ),
+          const SnackBar(content: Text('导出成功'), backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
@@ -746,10 +874,12 @@ class _DocumentPreview extends StatelessWidget {
   final List<SourceParagraph> paragraphs;
   final List<PolishSuggestion> suggestions;
   final int? currentSuggestionIndex;
+  final ScrollController? scrollController;
   const _DocumentPreview({
     required this.paragraphs,
     required this.suggestions,
     this.currentSuggestionIndex,
+    this.scrollController,
   });
 
   @override
@@ -782,6 +912,7 @@ class _DocumentPreview extends StatelessWidget {
     return Container(
       color: AppColors.surface,
       child: ListView.builder(
+        controller: scrollController,
         padding: const EdgeInsets.all(AppSpacing.lg),
         itemCount: paragraphs.length,
         itemBuilder: (_, i) {
@@ -796,18 +927,15 @@ class _DocumentPreview extends StatelessWidget {
             bgColor = const Color(0x0A2563EB);
           }
 
-          // 构建富文本：已采纳→替换文本绿色、已拒绝→原文删除线灰色、待审阅→原文蓝色
           final acceptedInThisPara = acceptedMap[i] ?? [];
           final rejectedInThisPara = rejectedMap[i] ?? [];
           final pendingInThisPara = pendingMap[i] ?? [];
 
           String text = para.text;
-          // 先应用已采纳替换
           for (final s in acceptedInThisPara) {
             text = text.replaceFirst(s.original, s.suggested);
           }
 
-          // 构建 TextSpan 标记 rejected 和 pending 区域
           final spans = _buildParagraphSpans(
             text,
             pendingInThisPara,
