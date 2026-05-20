@@ -55,10 +55,6 @@ class _HomePageState extends ConsumerState<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
             // ── Blue header ──
-            // Prototype: padding 20px top / 36px bottom
-            // We use bottom: 18px here and let QuickActions overlay
-            // the remaining 18px via negative Transform to match
-            // prototype's margin:-18px effect.
             _buildHeader(unreadCount),
             // ── Quick actions (overlaps header by 18px) ──
             const QuickActions(),

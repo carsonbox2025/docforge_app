@@ -250,6 +250,13 @@ class NotificationPage extends ConsumerWidget {
                 ref.read(notificationProvider.notifier).markAsRead(item.id);
                 if (item.actionRoute != null) {
                   context.push(item.actionRoute!);
+                } else if (item.type == NotificationType.docGenerated ||
+                    item.type == NotificationType.docPolished ||
+                    item.type == NotificationType.docTranslated) {
+                  final docId = _extractDocId(item.description);
+                  if (docId != null) {
+                    context.push('/preview/$docId?title=${Uri.encodeComponent(item.title)}');
+                  }
                 }
               },
             )),
@@ -257,6 +264,12 @@ class NotificationPage extends ConsumerWidget {
         );
       }).toList(),
     );
+  }
+
+  int? _extractDocId(String text) {
+    final match = RegExp(r'#?(\d{5,})').firstMatch(text);
+    if (match != null) return int.tryParse(match.group(1)!);
+    return null;
   }
 }
 

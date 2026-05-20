@@ -191,7 +191,7 @@ class _DocCard extends StatelessWidget {
     final isRunning = doc.status == DocStatus.running || doc.status == DocStatus.pending;
 
     return GestureDetector(
-      onTap: () => context.push('/documents/${doc.id}'),
+      onTap: () => context.push('/preview/${doc.id}?title=${Uri.encodeComponent(doc.title)}'),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
