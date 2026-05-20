@@ -22,7 +22,7 @@ class ReviewStage extends ConsumerStatefulWidget {
 
 class _ReviewStageState extends ConsumerState<ReviewStage> {
   WebViewController? _webViewController;
-  bool _isWebViewLoading = true;
+  bool _isWebViewLoading = false;
   String? _previewUrl;
   bool _webViewReady = false;
 
