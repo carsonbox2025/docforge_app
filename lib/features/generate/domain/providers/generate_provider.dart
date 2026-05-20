@@ -561,7 +561,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       return;
     }
 
-    state = state.copyWith(isExporting: true, exportSuccess: false, clearError: true);
+    state = state.copyWith(isExporting: true);
     try {
       // 从 API 获取最新标题（避免内存状态时序问题）
       String title = state.docTitle;
@@ -583,16 +583,17 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
         fileName: '$title${state.selectedFormat.extension}',
         subject: title,
       );
-      if (mounted) state = state.copyWith(isExporting: false, exportSuccess: true);
     } catch (e) {
       _log('[Generate] Export error: $e');
       if (mounted) {
         state = state.copyWith(
           isExporting: false,
-          error: '导出失败：$e',
+          error: '导出失败，请检查网络后重试',
         );
       }
+      return;
     }
+    if (mounted) state = state.copyWith(isExporting: false, error: null);
   }
 
   /// 获取预览 URL
@@ -654,7 +655,6 @@ class GenerateState {
 
   final String? error;
   final bool isExporting;
-  final bool exportSuccess;
 
   const GenerateState({
     this.stage = GenerateStage.input,
@@ -678,7 +678,6 @@ class GenerateState {
     this.resultData,
     this.error,
     this.isExporting = false,
-    this.exportSuccess = false,
   });
 
   GenerateState copyWith({
@@ -704,7 +703,6 @@ class GenerateState {
     Object? resultData = _sentinel,
     String? error,
     bool? isExporting,
-    bool? exportSuccess,
     bool clearError = false,
   }) =>
       GenerateState(
@@ -729,7 +727,6 @@ class GenerateState {
         resultData: resultData == _sentinel ? this.resultData : resultData as Map<String, dynamic>?,
         error: clearError ? null : (error ?? this.error),
         isExporting: isExporting ?? this.isExporting,
-        exportSuccess: exportSuccess ?? this.exportSuccess,
       );
 
   static const _sentinel = Object();

@@ -19,6 +19,7 @@ class GeneratingStage extends ConsumerStatefulWidget {
 class _GeneratingStageState extends ConsumerState<GeneratingStage> {
   final _scrollController = ScrollController();
   bool _userScrolledUp = false;
+  int _buildCount = 0;
 
   @override
   void initState() {
@@ -72,10 +73,12 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
     final isGenerating = status == GenerationStatus.generating;
     final isPlanning = status == GenerationStatus.planning;
 
+    final docTitle = ref.watch(generateProvider.select((s) => s.docTitle));
     final sceneName = ref.watch(generateProvider.select((s) => s.selectedScene?.name ?? '文档'));
     final langLabel = ref.watch(generateProvider.select((s) => s.selectedLanguage.label));
     
     final notifier = ref.read(generateProvider.notifier);
+    _buildCount++;
 
     ref.listen(
       generateProvider.select((s) => s.dslNodes),
