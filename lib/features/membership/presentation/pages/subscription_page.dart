@@ -8,6 +8,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/payment_channel_card.dart';
 import '../../../payment/data/models/payment_models.dart';
+import '../../../payment/domain/providers/payment_provider.dart';
 import '../../../scene/domain/providers/scene_provider.dart';
 import '../../data/models/membership_models.dart';
 import '../../domain/providers/membership_provider.dart';
@@ -21,11 +22,6 @@ class SubscriptionPage extends ConsumerStatefulWidget {
 
 class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -36,6 +32,17 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(membershipProvider);
+
+    ref.listen<MembershipState>(membershipProvider, (prev, next) {
+      if (next.successMessage != null && prev?.successMessage != next.successMessage) {
+        _showSnackBar(next.successMessage!, isError: false);
+        ref.read(membershipProvider.notifier).clearMessages();
+      }
+      if (next.errorMessage != null && prev?.errorMessage != next.errorMessage) {
+        _showSnackBar(next.errorMessage!, isError: true);
+        ref.read(membershipProvider.notifier).clearMessages();
+      }
+    });
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -52,13 +59,28 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
             const SizedBox(height: 16),
             _buildBenefitsTable(state),
             const SizedBox(height: 16),
-            _buildChannelSelector(ref, state),
+            if (!state.isIap) _buildChannelSelector(ref, state),
+            if (state.isIap) _buildIapHint(),
             const SizedBox(height: 16),
             _buildCTAButton(ref, state),
+            const SizedBox(height: 8),
+            _buildRestoreButton(ref, state),
             _buildFooterNote(),
             const SizedBox(height: 30),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showSnackBar(String message, {required bool isError}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -101,7 +123,6 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
       ),
       child: Column(
         children: [
-          // Pro badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
@@ -136,7 +157,6 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
             ),
           ),
           const SizedBox(height: 20),
-          // Stats row — 动态数据
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -241,7 +261,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          plan == PlanType.yearly ? '约¥16.6/月' : (plan == PlanType.lifetime ? '一次付费' : ''),
+                          plan == PlanType.yearly ? '约¥${(plan.priceNum / 12).toStringAsFixed(1)}/月' : (plan == PlanType.lifetime ? '一次付费' : ''),
                           style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
                         ),
                       ],
@@ -277,7 +297,6 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
       builder: (context, ref, _) {
         final scenesAsync = ref.watch(sceneListProvider);
 
-        // loading 态显示骨架占位
         if (scenesAsync.isLoading) {
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -408,6 +427,32 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
     );
   }
 
+  Widget _buildIapHint() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.primaryBg,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.primaryBorder),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.storefront_outlined, size: 18, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '将通过应用商店完成安全支付',
+                style: TextStyle(fontSize: 13, color: AppColors.primary.withValues(alpha: 0.9)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCTAButton(WidgetRef ref, MembershipState state) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -445,11 +490,32 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
     );
   }
 
+  Widget _buildRestoreButton(WidgetRef ref, MembershipState state) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: TextButton(
+        onPressed: state.isLoading ? null : () => _handleRestore(ref),
+        child: Text(
+          '已购买？恢复购买',
+          style: TextStyle(
+            fontSize: 13,
+            color: AppColors.primary.withValues(alpha: state.isLoading ? 0.4 : 1.0),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleSubscribe(WidgetRef ref) async {
     final notifier = ref.read(membershipProvider.notifier);
     final result = await notifier.subscribe();
     if (result == null || !mounted) return;
 
+    // IAP 路径已在 subscribe() 内部处理完毕
+    if (ref.read(membershipProvider).isIap) return;
+
+    // 在线支付路径：打开 pay_url 或提示微信不可用
     if (result.payParams != null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -457,7 +523,6 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
         );
       }
     } else if (result.payUrl != null && result.payUrl!.isNotEmpty) {
-      // 支付宝 H5 支付
       try {
         final uri = Uri.parse(result.payUrl!);
         if (uri.scheme.startsWith('https') || uri.scheme.startsWith('alipays')) {
@@ -476,6 +541,10 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
         }
       }
     }
+  }
+
+  Future<void> _handleRestore(WidgetRef ref) async {
+    await ref.read(membershipProvider.notifier).restorePurchases();
   }
 
   Widget _buildFooterNote() {
@@ -551,4 +620,3 @@ class _StatItem extends StatelessWidget {
     );
   }
 }
-

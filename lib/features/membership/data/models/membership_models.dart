@@ -1,12 +1,13 @@
 /// 套餐类型
 enum PlanType {
-  monthly('monthly', 'Pro 月度会员', '¥9.9', '/月', 9.9, 1),
-  yearly('yearly', 'Pro 年度会员', '¥99', '/年', 99, 12),
-  lifetime('lifetime', '终身会员', '¥499', '', 499, -1);
+  monthly('monthly', 'docforge_pro_monthly', 'Pro 月度会员', '¥9.9', '/月', 9.9, 1),
+  yearly('yearly', 'docforge_pro_yearly', 'Pro 年度会员', '¥99', '/年', 99, 12),
+  lifetime('lifetime', 'docforge_pro_lifetime', '终身会员', '¥499', '', 499, -1);
 
-  const PlanType(this.code, this.label, this.price, this.period, this.priceNum, this.months);
+  const PlanType(this.code, this.productId, this.label, this.price, this.period, this.priceNum, this.months);
 
   final String code;
+  final String productId;
   final String label;
   final String price;
   final String period;

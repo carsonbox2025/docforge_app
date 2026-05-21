@@ -7,7 +7,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../notification/domain/providers/notification_provider.dart';
-import '../../../payment/domain/providers/payment_provider.dart';
+import '../../../membership/domain/providers/membership_provider.dart';
 import '../widgets/quick_actions.dart';
 import '../widgets/feature_carousel.dart';
 import '../widgets/recent_documents.dart';
@@ -46,8 +46,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: () async {
-          ref.invalidate(quotaProvider);
-          await ref.read(quotaProvider.future);
+          await ref.read(quotaProvider.notifier).refresh();
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -159,37 +158,36 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildQuotaHint() {
-    final quotaAsync = ref.watch(quotaProvider);
-    return quotaAsync.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, _) => _buildQuotaBanner(
+    final quotaState = ref.watch(quotaProvider);
+    if (quotaState.isLoading) return const SizedBox.shrink();
+    final quota = quotaState.data;
+    if (quota == null) {
+      return _buildQuotaBanner(
         icon: Icons.info_outline,
         text: '配额信息加载失败，下拉刷新重试',
         color: AppColors.textMuted,
-      ),
-      data: (quota) {
-        if (quota.isYearly) {
-          return _buildQuotaBanner(
-            icon: Icons.workspace_premium,
-            text: '年度会员 · 全场景无限使用',
-            color: AppColors.primary,
-          );
-        }
-        if (quota.isPro) {
-          return _buildQuotaBanner(
-            icon: Icons.workspace_premium,
-            text: '${quota.planLabel} · 享受更多权益',
-            color: AppColors.primary,
-            onTap: () => context.push('/subscription'),
-          );
-        }
-        return _buildQuotaBanner(
-          icon: Icons.shield_outlined,
-          text: '部分场景限免体验，升级 Pro 解锁无限次',
-          color: AppColors.cta,
-          onTap: () => context.push('/subscription'),
-        );
-      },
+      );
+    }
+    if (quota.isYearly) {
+      return _buildQuotaBanner(
+        icon: Icons.workspace_premium,
+        text: '年度会员 · 全场景无限使用',
+        color: AppColors.primary,
+      );
+    }
+    if (quota.isPro) {
+      return _buildQuotaBanner(
+        icon: Icons.workspace_premium,
+        text: '${quota.planLabel} · 享受更多权益',
+        color: AppColors.primary,
+        onTap: () => context.push('/subscription'),
+      );
+    }
+    return _buildQuotaBanner(
+      icon: Icons.shield_outlined,
+      text: '部分场景限免体验，升级 Pro 解锁无限次',
+      color: AppColors.cta,
+      onTap: () => context.push('/subscription'),
     );
   }
 

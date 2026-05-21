@@ -13,6 +13,7 @@ import '../../../membership/data/models/membership_models.dart';
 import '../../../scene/data/models/scene_models.dart';
 import '../../data/models/payment_models.dart';
 import '../../domain/providers/payment_provider.dart';
+import '../../../membership/domain/providers/membership_provider.dart';
 import '../../../../shared/widgets/payment_channel_card.dart';
 
 /// 支付墙弹窗 — 月额度耗尽时弹出，提供单次购买或升级会员

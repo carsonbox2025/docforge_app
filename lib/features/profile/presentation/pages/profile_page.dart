@@ -8,9 +8,8 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../auth/domain/providers/auth_provider.dart';
-import '../../../payment/domain/providers/payment_provider.dart' as payment;
+import '../../../membership/domain/providers/membership_provider.dart';
 import '../../../notification/domain/providers/notification_provider.dart';
-import '../../domain/providers/quota_provider.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -42,9 +41,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final user = authState.user;
     final displayName = user?.username ?? user?.phone ?? '用户';
     final quotaState = ref.watch(quotaProvider);
-    final isPro = ref.watch(payment.quotaProvider).maybeWhen(
-      data: (quota) => quota.isPro, orElse: () => false,
-    );
+    final isPro = quotaState.isPro;
     final unreadAsync = ref.watch(unreadCountProvider);
     final unreadCount = unreadAsync.maybeWhen(data: (c) => c, orElse: () => 0);
 
@@ -451,6 +448,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   // ─── Subscription banner ───────────────────────────────────────────────────
 
   Widget _buildSubscriptionBanner() {
+    final quotaState = ref.watch(quotaProvider);
+    final isPro = quotaState.isPro;
+    final title = isPro ? '续费 Pro 会员' : '开通 Pro 会员';
+    final subtitle = isPro
+        ? '保持无限生成、高级模板与优先客服'
+        : '解锁无限生成、高级模板与优先客服';
+    final button = isPro ? '立即续费' : '立即开通';
+
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 4, 20, 12),
       padding: const EdgeInsets.all(16),
@@ -466,9 +471,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '续费 Pro 会员',
-                  style: TextStyle(
+                Text(
+                  title,
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,
@@ -476,7 +481,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '解锁无限生成、高级模板与优先客服',
+                  subtitle,
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.white.withValues(alpha: 0.7),
@@ -495,9 +500,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
-              child: const Text(
-                '立即续费',
-                style: TextStyle(
+              child: Text(
+                button,
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: AppColors.primary,

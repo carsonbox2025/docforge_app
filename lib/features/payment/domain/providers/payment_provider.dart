@@ -5,34 +5,8 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/iap/channel_detector.dart';
 import '../../../../core/iap/iap_service.dart';
 import '../../../../core/iap/iap_receipt_queue.dart';
-import '../../../../core/storage/local_cache.dart';
 import '../../data/payment_data_source.dart';
 import '../../data/models/payment_models.dart';
-
-const _quotaCacheKey = 'user_quota';
-const _quotaCacheTtl = Duration(minutes: 5);
-
-/// 全局配额 Provider
-final quotaProvider = FutureProvider<QuotaInfo>((ref) async {
-  final cached =
-      LocalCache.instance.getWithTtl<Map<String, dynamic>>(_quotaCacheKey);
-  if (cached != null) {
-    try {
-      return QuotaInfo.fromJson(cached);
-    } catch (_) {
-      await LocalCache.instance.delete(_quotaCacheKey);
-    }
-  }
-
-  final quota = await PaymentDataSource().getMyQuota();
-
-  try {
-    await LocalCache.instance
-        .set(_quotaCacheKey, quota.toJson(), ttl: _quotaCacheTtl);
-  } catch (_) {}
-
-  return quota;
-});
 
 /// 动态商品列表 Provider，根据当前渠道自动加载
 final productsProvider = FutureProvider.family<List<Product>, String>((ref, channel) async {
@@ -61,19 +35,22 @@ class PaymentState {
   final bool isLoading;
   final OrderRecord? currentOrder;
   final String? error;
+  final bool? purchaseSuccess;
 
-  const PaymentState({this.isLoading = false, this.currentOrder, this.error});
+  const PaymentState({this.isLoading = false, this.currentOrder, this.error, this.purchaseSuccess});
 
   PaymentState copyWith({
     bool? isLoading,
     OrderRecord? currentOrder,
     String? error,
     bool clearError = false,
+    bool? purchaseSuccess,
   }) =>
       PaymentState(
         isLoading: isLoading ?? this.isLoading,
         currentOrder: currentOrder ?? this.currentOrder,
         error: clearError ? null : (error ?? this.error),
+        purchaseSuccess: purchaseSuccess,
       );
 }
 
@@ -99,7 +76,7 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
       return order;
     } catch (e) {
       debugPrint('[Payment] createOrder error: $e');
-      state = state.copyWith(isLoading: false, error: '创建订单失败: $e');
+      state = state.copyWith(isLoading: false, error: '创建订单失败');
       rethrow;
     }
   }
@@ -133,7 +110,7 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         return false;
       }
 
-      // 3. 🚨 写入本地防掉单挂起凭证队列
+      // 3. 写入本地防掉单队列
       final queued = QueuedReceipt(
         orderNo: order.orderNo,
         receiptData: result.receiptData!,
@@ -145,20 +122,21 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
 
       // 4. 服务端验票并发货
       final verified = await _ds.verifyOrder(order.orderNo, result.receiptData!);
-      
-      // 5. 🚨 验票成功，从本地防掉单队列中安全擦除
+
+      // 5. 验票成功，从防掉单队列中擦除
       await IapReceiptQueue.instance.dequeue(order.orderNo);
 
       state = state.copyWith(
         isLoading: false,
         currentOrder: verified,
+        purchaseSuccess: verified.isPaid,
       );
       return verified.isPaid;
     } catch (e) {
       debugPrint('[Payment] iapPurchase error: $e');
       state = state.copyWith(
-        isLoading: false, 
-        error: '支付已成功，但网络较慢。请稍后点击上方【恢复购买】确认会员状态',
+        isLoading: false,
+        error: '支付已成功，正在确认中。请稍后在"我的"页面查看会员状态',
       );
       return false;
     }
@@ -171,7 +149,10 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
       try {
         final order = await _ds.getOrder(orderNo);
         state = state.copyWith(currentOrder: order);
-        if (order.isPaid) return true;
+        if (order.isPaid) {
+          state = state.copyWith(purchaseSuccess: true);
+          return true;
+        }
         if (!order.isPending) return false;
       } catch (e) {
         debugPrint('[Payment] pollUntilPaid #$i error: $e');

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../../core/storage/local_cache.dart';
-import '../../features/payment/data/payment_data_source.dart';
 
 class QueuedReceipt {
   final String orderNo;
@@ -35,47 +34,63 @@ class QueuedReceipt {
   );
 }
 
-/// IAP 掉单补偿本地队列（极度保障商业合规性与上架退款率）
+/// 验票回调签名
+typedef VerifyCallback = Future<bool> Function(String orderNo, String receiptData);
+
+/// IAP 掉单补偿本地队列
 class IapReceiptQueue {
   static const _storageKey = 'iap_unverified_receipts_v1';
-  final PaymentDataSource _ds = PaymentDataSource();
 
-  static final IapReceiptQueue instance = IapReceiptQueue._();
-  IapReceiptQueue._();
+  final VerifyCallback _verifyCallback;
 
-  /// 1. 保存未完成的凭证到本地
+  static IapReceiptQueue? _instance;
+
+  /// 使用时通过 init() 注入验票回调
+  static IapReceiptQueue get instance {
+    assert(_instance != null, 'IapReceiptQueue.init() must be called before use');
+    return _instance!;
+  }
+
+  IapReceiptQueue._(this._verifyCallback);
+
+  /// 初始化并注入验票回调
+  static void init(VerifyCallback verifyCallback) {
+    _instance ??= IapReceiptQueue._(verifyCallback);
+  }
+
+  /// 保存未完成的凭证到本地
   Future<void> enqueue(QueuedReceipt receipt) async {
     final list = await _loadQueue();
-    // 防重复加入
     list.removeWhere((r) => r.orderNo == receipt.orderNo);
     list.add(receipt);
     await _saveQueue(list);
   }
 
-  /// 2. 移除已完成的凭证
+  /// 移除已完成的凭证
   Future<void> dequeue(String orderNo) async {
     final list = await _loadQueue();
     list.removeWhere((r) => r.orderNo == orderNo);
     await _saveQueue(list);
   }
 
-  /// 3. 执行队列内的所有凭证自动验票补单（在应用启动或打开支付墙时调用）
+  /// 执行队列内的所有凭证自动验票补单
   Future<void> processPendingQueue() async {
     final list = await _loadQueue();
     if (list.isEmpty) return;
 
     debugPrint('[IapQueue] 开始自动补单重试，挂起凭证数: ${list.length}');
     for (final receipt in list) {
-      // 过滤超过 7 天的陈旧未验票订单，防止无限循环
       if (DateTime.now().millisecondsSinceEpoch - receipt.timestamp > 7 * 24 * 3600 * 1000) {
         await dequeue(receipt.orderNo);
         continue;
       }
       try {
         debugPrint('[IapQueue] 正在后台静默验票，单号: ${receipt.orderNo}');
-        await _ds.verifyOrder(receipt.orderNo, receipt.receiptData);
-        await dequeue(receipt.orderNo);
-        debugPrint('[IapQueue] 补单发货成功，单号: ${receipt.orderNo}');
+        final success = await _verifyCallback(receipt.orderNo, receipt.receiptData);
+        if (success) {
+          await dequeue(receipt.orderNo);
+          debugPrint('[IapQueue] 补单发货成功，单号: ${receipt.orderNo}');
+        }
       } catch (e) {
         debugPrint('[IapQueue] 后台验票重试失败，单号: ${receipt.orderNo}, 错误: $e');
       }

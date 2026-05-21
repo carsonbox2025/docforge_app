@@ -74,13 +74,17 @@ class AppConstants {
   static String sceneGenerateUrl(String id) =>
       '$apiBasePath/scenes/$id/generate';
 
-  // Payment APIs
-  static String get ordersCreateUrl => '$apiBasePath/payment/orders/create';
-  static String orderDetailUrl(String orderNo) =>
-      '$apiBasePath/payment/orders/$orderNo';
-  static String orderRefundUrl(String orderNo) =>
-      '$apiBasePath/payment/orders/$orderNo/refund';
-  static String get quotasMeUrl => '$apiBasePath/payment/quotas/me';
+  // Payment APIs (unified module)
+  static String get paymentBase => '$apiOrigin/aistudio/service/payment';
+  static String paymentProductsUrl(String channel) =>
+      '$paymentBase/products?app_key=$appKey&channel=$channel';
+  static String get paymentOrdersUrl => '$paymentBase/orders';
+  static String paymentOrderUrl(String orderNo) =>
+      '$paymentBase/orders/$orderNo';
+  static String paymentOrderVerifyUrl(String orderNo) =>
+      '$paymentBase/orders/$orderNo/verify';
+  static String get paymentRestoreUrl => '$paymentBase/restore';
+  static String get quotasMeUrl => '$paymentBase/quotas/me';
 
   // Quota APIs (relative paths for Dio baseUrl)
   static const String quotaUsageUrl = '/quota/usage';

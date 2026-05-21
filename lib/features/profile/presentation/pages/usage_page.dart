@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../domain/providers/quota_provider.dart';
+import '../../../membership/domain/providers/membership_provider.dart';
 import '../../../payment/data/models/payment_models.dart';
 
 /// 场景显示配置

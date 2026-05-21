@@ -45,7 +45,7 @@ class Product {
       );
 
   String get displayPrice =>
-      '¥${(priceCents / 100).toStringAsFixed(priceCents % 100 == 0 ? 0 : 1)}';
+      '¥${(priceCents / 100).toStringAsFixed(2)}';
 }
 
 class CreateOrderRequest {
@@ -118,7 +118,7 @@ class OrderRecord {
       );
 
   String get displayAmount =>
-      '¥${(amountCents / 100).toStringAsFixed(amountCents % 100 == 0 ? 0 : 1)}';
+      '¥${(amountCents / 100).toStringAsFixed(2)}';
   bool get isPaid => status == 'paid' || status == 'delivered';
   bool get isPending => status == 'pending';
 }

@@ -7,12 +7,10 @@ import 'models/payment_models.dart';
 class PaymentDataSource {
   final Dio _dio = ApiClient.instance.dio;
 
-  String get _paymentBase => '${AppConstants.apiOrigin}/aistudio/service/payment';
-
   /// 查询商品列表
   Future<List<Product>> getProducts(String channel) async {
     final response = await _dio.get(
-      '$_paymentBase/products',
+      AppConstants.paymentBase + '/products',
       queryParameters: {
         'app_key': AppConstants.appKey,
         'channel': channel,
@@ -31,7 +29,7 @@ class PaymentDataSource {
   /// 创建订单
   Future<OrderRecord> createOrder(CreateOrderRequest request) async {
     final response = await _dio.post(
-      '$_paymentBase/orders',
+      AppConstants.paymentOrdersUrl,
       data: request.toJson(),
     );
     final data = response.data['data'];
@@ -44,7 +42,7 @@ class PaymentDataSource {
   /// IAP 验票
   Future<OrderRecord> verifyOrder(String orderNo, String receiptData) async {
     final response = await _dio.post(
-      '$_paymentBase/orders/$orderNo/verify',
+      AppConstants.paymentOrderVerifyUrl(orderNo),
       data: {
         'app_key': AppConstants.appKey,
         'receipt_data': receiptData,
@@ -59,7 +57,7 @@ class PaymentDataSource {
 
   /// 查询订单状态
   Future<OrderRecord> getOrder(String orderNo) async {
-    final response = await _dio.get('$_paymentBase/orders/$orderNo');
+    final response = await _dio.get(AppConstants.paymentOrderUrl(orderNo));
     final data = response.data['data'];
     if (data == null) {
       throw Exception(response.data['message'] ?? '查询订单失败');
@@ -70,7 +68,7 @@ class PaymentDataSource {
   /// 恢复购买（非消耗品/订阅）
   Future<List<OrderRecord>> restorePurchases() async {
     final response = await _dio.post(
-      '$_paymentBase/restore',
+      AppConstants.paymentRestoreUrl,
       data: {'app_key': AppConstants.appKey},
     );
     final data = response.data['data'];
@@ -91,14 +89,5 @@ class PaymentDataSource {
       throw Exception(response.data['message'] ?? '获取配额失败');
     }
     return QuotaInfo.fromJson(data as Map<String, dynamic>);
-  }
-
-  /// 申请退款
-  Future<bool> refundOrder(String orderNo, {String reason = ''}) async {
-    final response = await _dio.post(
-      '$_paymentBase/admin/orders/$orderNo/refund',
-      data: {'reason': reason},
-    );
-    return response.data['code'] == 200 || response.data['code'] == 0;
   }
 }

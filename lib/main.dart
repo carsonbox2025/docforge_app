@@ -6,7 +6,9 @@ import 'core/storage/local_cache.dart';
 import 'core/network/api_client.dart';
 import 'core/providers/core_providers.dart';
 import 'core/iap/channel_detector.dart';
+import 'core/iap/iap_receipt_queue.dart';
 import 'features/auth/domain/providers/auth_provider.dart';
+import 'features/payment/data/payment_data_source.dart';
 import 'app/app.dart';
 
 void main() {
@@ -30,6 +32,19 @@ void main() {
     }
 
     ApiClient.instance.init();
+
+    // 初始化 IAP 掉单补偿队列，注入验票回调
+    final paymentDs = PaymentDataSource();
+    IapReceiptQueue.init((orderNo, receiptData) async {
+      try {
+        final order = await paymentDs.verifyOrder(orderNo, receiptData);
+        return order.isPaid;
+      } catch (_) {
+        return false;
+      }
+    });
+    // 启动后自动补单
+    IapReceiptQueue.instance.processPendingQueue();
 
     runApp(const ProviderScope(child: _EagerInit(child: DocForgeApp())));
   }, (error, stack) {

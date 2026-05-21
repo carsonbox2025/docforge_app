@@ -7,7 +7,7 @@ import '../../../../core/network/api_interceptor.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../scene/data/models/scene_models.dart';
 import '../../../scene/domain/providers/scene_provider.dart';
-import '../../../payment/domain/providers/payment_provider.dart';
+import '../../../membership/domain/providers/membership_provider.dart';
 import '../../../payment/presentation/widgets/pay_wall.dart';
 import '../../data/models/generate_models.dart';
 import '../../domain/providers/generate_provider.dart';
@@ -412,7 +412,12 @@ class _InputStageState extends ConsumerState<InputStage> {
 
     if (scene != null) {
       try {
-        final quota = await ref.read(quotaProvider.future);
+        final quotaState = ref.read(quotaProvider);
+        final quota = quotaState.data;
+        if (quota == null) {
+          notifier.startGenerate();
+          return;
+        }
 
         // 日限额耗尽 → 会员日限无限（引导升级）
         if (quota.isDailyExhausted(scene.sceneId)) {

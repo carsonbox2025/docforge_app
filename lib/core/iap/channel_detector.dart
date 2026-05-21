@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -7,30 +8,36 @@ enum IapChannel { huawei, xiaomi, oppo, vivo, honor, official }
 abstract class ChannelDetector {
   static const _channel = MethodChannel('com.docforge.app/iap');
   static IapChannel? _cached;
+  static Completer<void>? _initCompleter;
 
   static Future<void> init() async {
     if (_cached != null) return;
+    if (_initCompleter != null) return await _initCompleter!.future;
 
-    if (!kIsWeb && Platform.isAndroid) {
-      // 1. 优先读打包时注入的渠道标记
-      const buildChannel = String.fromEnvironment('CHANNEL');
-      if (buildChannel.isNotEmpty) {
-        _cached = IapChannel.values.firstWhere(
-          (c) => c.name == buildChannel,
-          orElse: () => IapChannel.official,
-        );
-        return;
-      }
-
-      // 2. 通过 Platform Channel 检测安装来源
-      try {
-        final String? installer = await _channel.invokeMethod<String>('getInstallerPackageName');
-        _cached = _mapInstaller(installer);
-      } catch (_) {
+    _initCompleter = Completer<void>();
+    try {
+      if (!kIsWeb && Platform.isAndroid) {
+        const buildChannel = String.fromEnvironment('CHANNEL');
+        if (buildChannel.isNotEmpty) {
+          _cached = IapChannel.values.firstWhere(
+            (c) => c.name == buildChannel,
+            orElse: () => IapChannel.official,
+          );
+        } else {
+          try {
+            final String? installer = await _channel.invokeMethod<String>('getInstallerPackageName');
+            _cached = _mapInstaller(installer);
+          } catch (_) {
+            _cached = IapChannel.official;
+          }
+        }
+      } else {
         _cached = IapChannel.official;
       }
-    } else {
+      _initCompleter!.complete();
+    } catch (e) {
       _cached = IapChannel.official;
+      _initCompleter!.complete();
     }
   }
 
