@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/storage/local_cache.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../shared/widgets/payment_channel_card.dart';
+import '../../../membership/data/models/membership_models.dart';
 import '../../../scene/data/models/scene_models.dart';
 import '../../data/models/payment_models.dart';
 import '../../domain/providers/payment_provider.dart';
+import '../../../../shared/widgets/payment_channel_card.dart';
 
 /// 支付墙弹窗 — 月额度耗尽时弹出，提供单次购买或升级会员
 class PayWall extends ConsumerStatefulWidget {
@@ -36,10 +39,34 @@ class PayWall extends ConsumerStatefulWidget {
 
 enum _PayStep { idle, paying, waiting, confirming, done }
 
-class _PayWallState extends ConsumerState<PayWall> {
+class _PayWallState extends ConsumerState<PayWall>
+    with WidgetsBindingObserver {
   PaymentChannel _channel = PaymentChannel.alipay;
   _PayStep _step = _PayStep.idle;
   String? _orderNo;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 支付宝：用户从支付宝 App 返回时自动查询订单状态
+    if (state == AppLifecycleState.resumed &&
+        _orderNo != null &&
+        _step == _PayStep.waiting &&
+        _channel == PaymentChannel.alipay) {
+      _handleManualConfirm();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,9 +161,9 @@ class _PayWallState extends ConsumerState<PayWall> {
           children: [
             const Icon(Icons.workspace_premium_outlined, size: 18, color: Colors.white),
             const SizedBox(width: 8),
-            const Text(
-              '升级会员 ¥9.9/月 · 全场景畅用',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+            Text(
+              '升级会员 ${PlanType.monthly.price}/月 · 全场景畅用',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
             ),
             const SizedBox(width: 4),
             const Icon(Icons.chevron_right, size: 18, color: Colors.white70),
@@ -239,12 +266,16 @@ class _PayWallState extends ConsumerState<PayWall> {
           );
       _orderNo = order.orderNo;
 
-      if (order.payUrl != null && order.payUrl!.isNotEmpty) {
+      if (_channel == PaymentChannel.wechat && order.payParams != null) {
+        // 微信 V3 APP 支付：通过 OpenSDK 调起
+        await _launchWechatPay(order.payParams!);
+      } else if (order.payUrl != null && order.payUrl!.isNotEmpty) {
+        // 支付宝 H5 支付：通过 URL 调起
         final uri = Uri.parse(order.payUrl!);
-        if (!uri.scheme.startsWith('https') && !uri.scheme.startsWith('alipays') && !uri.scheme.startsWith('weixin')) {
+        if (!uri.scheme.startsWith('https') && !uri.scheme.startsWith('alipays')) {
           throw ArgumentError('不安全的支付链接');
         }
-        final launched = await launchUrl(uri);
+        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
         if (!launched && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('无法打开支付页面，请检查网络'), backgroundColor: AppColors.warn),
@@ -260,6 +291,15 @@ class _PayWallState extends ConsumerState<PayWall> {
           const SnackBar(content: Text('创建订单失败，请重试'), backgroundColor: AppColors.error),
         );
       }
+    }
+  }
+
+  Future<void> _launchWechatPay(Map<String, String> params) async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('微信支付暂不可用，请选择其他支付方式'), backgroundColor: AppColors.warn),
+      );
+      setState(() => _step = _PayStep.idle);
     }
   }
 

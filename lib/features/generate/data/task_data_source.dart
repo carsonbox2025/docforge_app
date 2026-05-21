@@ -112,6 +112,8 @@ class TaskDataSource {
       'polish_level': ?polishLevel,
       'source_lang': ?sourceLang,
       'target_lang': ?targetLang,
+      'scene_id': userInput['scene_id'],
+      'layer': userInput['layer'] ?? 1,
     };
     _log('[TaskDataSource] submitTask: docType=$docType, taskType=${taskType.name}, '
         'templateId=$templateId, sceneId=${userInput['scene_id']}, layer=${userInput['layer']}');

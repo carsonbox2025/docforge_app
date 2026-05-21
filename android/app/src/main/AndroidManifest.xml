@@ -45,5 +45,9 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- 支付宝 -->
+        <package android:name="com.eg.android.AlipayGphone" />
+        <!-- 微信 -->
+        <package android:name="com.tencent.mm" />
     </queries>
 </manifest>

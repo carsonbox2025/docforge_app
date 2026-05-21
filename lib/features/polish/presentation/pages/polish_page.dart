@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/feature_header.dart';
+import '../../../payment/presentation/widgets/pay_wall.dart';
+import '../../../scene/domain/providers/scene_provider.dart';
 import '../../data/models/polish_models.dart';
 import '../../domain/providers/polish_provider.dart';
 
@@ -15,10 +17,39 @@ class PolishPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(polishProvider);
 
+    // QUOTA_EXCEEDED 监听放在页面级（始终挂载），避免 AnimatedSwitcher 切换子 widget 时丢失 listener
+    ref.listen<PolishState>(polishProvider, (prev, next) {
+      if (next.errorMessage == 'QUOTA_EXCEEDED' &&
+          (prev == null || prev.errorMessage != 'QUOTA_EXCEEDED')) {
+        _showPayWall(context, ref, next);
+      }
+    });
+
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
       child: _stageWidget(state.stage),
     );
+  }
+
+  Future<void> _showPayWall(BuildContext context, WidgetRef ref, PolishState state) async {
+    final sceneId = state.inputMode == InputMode.upload ? 'scene_polish_long' : 'scene_polish';
+    try {
+      final scenes = await ref.read(sceneListProvider.future);
+      final scene = scenes.firstWhere(
+        (s) => s.sceneId == sceneId,
+        orElse: () => scenes.first,
+      );
+      if (context.mounted) {
+        PayWall.show(
+          context,
+          scene: scene,
+          onPaid: () => ref.read(polishProvider.notifier).startPolish(),
+        );
+      }
+    } catch (e) {
+      // 场景加载失败时回退到订阅页
+      if (context.mounted) context.push('/subscription');
+    }
   }
 
   Widget _stageWidget(PolishStage stage) {
@@ -45,78 +76,6 @@ class _InputStage extends ConsumerStatefulWidget {
 }
 
 class _InputStageState extends ConsumerState<_InputStage> {
-  @override
-  void initState() {
-    super.initState();
-    ref.listenManual(polishProvider, (prev, next) {
-      if (next.errorMessage == 'QUOTA_EXCEEDED' &&
-          (prev == null || prev.errorMessage != 'QUOTA_EXCEEDED')) {
-        _showQuotaExceededDialog();
-      }
-    });
-  }
-
-  void _showQuotaExceededDialog() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40, height: 4,
-                  margin: const EdgeInsets.only(bottom: 20),
-                  decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
-                ),
-                const Icon(Icons.lock_outline, size: 40, color: AppColors.textMuted),
-                const SizedBox(height: 16),
-                const Text('额度不足', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
-                const SizedBox(height: 8),
-                const Text('今日/当月精修次数已用完', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
-                const SizedBox(height: 20),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    context.push('/subscription');
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFF57C00)]),
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.workspace_premium_outlined, size: 18, color: Colors.white),
-                        SizedBox(width: 8),
-                        Text('升级会员 ¥9.9/月 · 畅享精修', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('稍后再说', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(polishProvider);

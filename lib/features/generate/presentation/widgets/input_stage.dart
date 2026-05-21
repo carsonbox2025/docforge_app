@@ -414,18 +414,24 @@ class _InputStageState extends ConsumerState<InputStage> {
       try {
         final quota = await ref.read(quotaProvider.future);
 
-        // 日限额耗尽 → 提示明天再来
+        // 日限额耗尽 → 会员日限无限（引导升级）
         if (quota.isDailyExhausted(scene.sceneId)) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('今日使用次数已用完，请明天再试'),
-                backgroundColor: AppColors.warn,
-                duration: Duration(seconds: 3),
-              ),
-            );
+            if (quota.isPro) {
+              // 会员不应有日限，可能是缓存问题，允许继续
+              debugPrint('[Generate] Pro user hit daily limit, allowing through (cache staleness)');
+            } else {
+              PayWall.show(
+                context,
+                scene: scene,
+                onPaid: () {
+                  notifier.updateFormFields({..._fieldValues});
+                  notifier.startGenerate();
+                },
+              );
+              return;
+            }
           }
-          return;
         }
 
         // 月限额耗尽 → 弹出付费墙

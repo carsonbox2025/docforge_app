@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/iap/channel_detector.dart';
+import '../../../../core/iap/iap_service.dart';
 import '../../../../core/storage/local_cache.dart';
 import '../../data/payment_data_source.dart';
 import '../../data/models/payment_models.dart';
@@ -8,10 +10,10 @@ import '../../data/models/payment_models.dart';
 const _quotaCacheKey = 'user_quota';
 const _quotaCacheTtl = Duration(minutes: 5);
 
-/// 全局配额 Provider（带本地缓存，TTL 5分钟）
+/// 全局配额 Provider
 final quotaProvider = FutureProvider<QuotaInfo>((ref) async {
-  // 优先从缓存读取
-  final cached = LocalCache.instance.getWithTtl<Map<String, dynamic>>(_quotaCacheKey);
+  final cached =
+      LocalCache.instance.getWithTtl<Map<String, dynamic>>(_quotaCacheKey);
   if (cached != null) {
     try {
       return QuotaInfo.fromJson(cached);
@@ -22,25 +24,38 @@ final quotaProvider = FutureProvider<QuotaInfo>((ref) async {
 
   final quota = await PaymentDataSource().getMyQuota();
 
-  // 写入缓存
   try {
-    await LocalCache.instance.set(_quotaCacheKey, quota.toJson(), ttl: _quotaCacheTtl);
+    await LocalCache.instance
+        .set(_quotaCacheKey, quota.toJson(), ttl: _quotaCacheTtl);
   } catch (_) {}
 
   return quota;
 });
 
-/// 支付状态管理
+/// 当前渠道 Provider
+final currentChannelProvider = Provider<PaymentChannel>((ref) {
+  final iapChannel = ChannelDetector.detect();
+  if (iapChannel != IapChannel.official) {
+    return PaymentChannel.values.firstWhere(
+      (c) => c.name == iapChannel.name,
+      orElse: () => PaymentChannel.alipay,
+    );
+  }
+  return PaymentChannel.alipay;
+});
+
+/// 是否 IAP 渠道
+final isIapProvider = Provider<bool>((ref) {
+  return ChannelDetector.isIap;
+});
+
+/// 支付状态
 class PaymentState {
   final bool isLoading;
   final OrderRecord? currentOrder;
   final String? error;
 
-  const PaymentState({
-    this.isLoading = false,
-    this.currentOrder,
-    this.error,
-  });
+  const PaymentState({this.isLoading = false, this.currentOrder, this.error});
 
   PaymentState copyWith({
     bool? isLoading,
@@ -57,23 +72,21 @@ class PaymentState {
 
 class PaymentNotifier extends StateNotifier<PaymentState> {
   final PaymentDataSource _ds = PaymentDataSource();
+  final IapService _iap = IapService();
 
   PaymentNotifier() : super(const PaymentState());
 
-  /// 创建订单并返回支付链接
+  /// 创建订单 — 在线支付返回 pay_url，IAP 返回空
   Future<OrderRecord> createOrder({
     required PaymentChannel channel,
-    String? sceneId,
-    int? documentId,
-    String orderType = 'per_doc',
+    required String productId,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final order = await _ds.createOrder(CreateOrderRequest(
+        appKey: 'docforge',
         channel: channel.name,
-        sceneId: sceneId,
-        documentId: documentId,
-        orderType: orderType,
+        productId: productId,
       ));
       state = state.copyWith(isLoading: false, currentOrder: order);
       return order;
@@ -84,7 +97,51 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     }
   }
 
-  /// 轮询订单状态直到支付完成
+  /// IAP 支付流程：创建订单 → 原生 SDK 支付 → 验票
+  Future<bool> iapPurchase({
+    required String productId,
+    required PaymentChannel channel,
+  }) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      // 1. 创建本地订单
+      final order = await _ds.createOrder(CreateOrderRequest(
+        appKey: 'docforge',
+        channel: channel.name,
+        productId: productId,
+      ));
+      state = state.copyWith(currentOrder: order);
+
+      // 2. 调原生 SDK 支付
+      final result = await _iap.launchPayFlow(
+        productId: productId,
+        orderNo: order.orderNo,
+      );
+
+      if (!result.success || result.receiptData == null) {
+        state = state.copyWith(
+          isLoading: false,
+          error: result.error ?? '支付失败',
+        );
+        return false;
+      }
+
+      // 3. 服务端验票
+      final verified =
+          await _ds.verifyOrder(order.orderNo, result.receiptData!);
+      state = state.copyWith(
+        isLoading: false,
+        currentOrder: verified,
+      );
+      return verified.isPaid;
+    } catch (e) {
+      debugPrint('[Payment] iapPurchase error: $e');
+      state = state.copyWith(isLoading: false, error: 'IAP支付失败: $e');
+      return false;
+    }
+  }
+
+  /// 在线支付轮询确认
   Future<bool> pollUntilPaid(String orderNo, {int maxAttempts = 90}) async {
     for (var i = 0; i < maxAttempts; i++) {
       await Future.delayed(const Duration(seconds: 2));
@@ -95,10 +152,15 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         if (!order.isPending) return false;
       } catch (e) {
         debugPrint('[Payment] pollUntilPaid #$i error: $e');
-        if (i >= 3) return false; // 连续失败后提前退出
+        if (i >= 3) return false;
       }
     }
     return false;
+  }
+
+  /// 恢复购买
+  Future<List<OrderRecord>> restorePurchases() async {
+    return _ds.restorePurchases();
   }
 
   /// 获取配额

@@ -1,11 +1,17 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../data/models/membership_models.dart';
 import '../../../payment/data/payment_data_source.dart';
 import '../../../payment/data/models/payment_models.dart';
 import '../../../scene/data/models/scene_models.dart';
 import '../../../scene/domain/providers/scene_provider.dart';
+
+/// 订阅下单结果：包含支付宝 URL 或微信 APP 调起参数
+class PaymentLaunchResult {
+  final String? payUrl;
+  final Map<String, String>? payParams;
+  const PaymentLaunchResult({this.payUrl, this.payParams});
+}
 
 class MembershipState {
   final QuotaInfo? quota;
@@ -116,8 +122,8 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
     state = state.copyWith(isLoading: false);
   }
 
-  /// 真实订阅流程
-  Future<void> subscribe() async {
+  /// 创建会员订阅订单（不含 UI 操作），返回支付参数供 UI 层调起支付
+  Future<PaymentLaunchResult?> subscribe() async {
     _cancelled = false;
     state = state.copyWith(isLoading: true);
     try {
@@ -126,35 +132,38 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
         orderType: 'membership',
       ));
 
-      // 打开支付链接（安全校验）
-      if (order.payUrl != null && order.payUrl!.isNotEmpty) {
-        final uri = Uri.parse(order.payUrl!);
-        if (uri.scheme.startsWith('https') || uri.scheme.startsWith('alipays') || uri.scheme.startsWith('weixin')) {
-          await launchUrl(uri);
-        }
-      }
-
       // 轮询至支付完成
-      for (var i = 0; i < 30; i++) {
-        await Future.delayed(const Duration(seconds: 3));
-        if (!mounted || _cancelled) return;
-        try {
-          final updated = await _paymentDs.getOrder(order.orderNo);
-          if (updated.isPaid) {
-            await loadQuota();
-            return;
-          }
-          if (!updated.isPending) return;
-        } catch (e) {
-          debugPrint('[Membership] poll order error: $e');
-          if (i >= 2) break;
-        }
-      }
+      _pollOrder(order.orderNo);
+
+      return PaymentLaunchResult(
+        payUrl: order.payUrl,
+        payParams: order.payParams,
+      );
     } catch (e) {
       debugPrint('[Membership] subscribe error: $e');
-    } finally {
       if (mounted) state = state.copyWith(isLoading: false);
+      return null;
     }
+  }
+
+  /// 后台轮询订单状态
+  Future<void> _pollOrder(String orderNo) async {
+    for (var i = 0; i < 60; i++) {
+      await Future.delayed(const Duration(seconds: 3));
+      if (!mounted || _cancelled) return;
+      try {
+        final updated = await _paymentDs.getOrder(orderNo);
+        if (updated.isPaid) {
+          await loadQuota();
+          return;
+        }
+        if (!updated.isPending) return;
+      } catch (e) {
+        debugPrint('[Membership] poll order error: $e');
+        if (i >= 5) break;
+      }
+    }
+    if (mounted) state = state.copyWith(isLoading: false);
   }
 }
 

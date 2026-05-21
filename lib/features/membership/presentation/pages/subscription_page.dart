@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
@@ -18,6 +20,11 @@ class SubscriptionPage extends ConsumerStatefulWidget {
 }
 
 class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -408,7 +415,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
         width: double.infinity,
         height: 48,
         child: ElevatedButton(
-          onPressed: state.isLoading ? null : () => ref.read(membershipProvider.notifier).subscribe(),
+          onPressed: state.isLoading ? null : () => _handleSubscribe(ref),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
@@ -436,6 +443,39 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleSubscribe(WidgetRef ref) async {
+    final notifier = ref.read(membershipProvider.notifier);
+    final result = await notifier.subscribe();
+    if (result == null || !mounted) return;
+
+    if (result.payParams != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('微信支付暂不可用，请选择其他支付方式'), backgroundColor: AppColors.warn),
+        );
+      }
+    } else if (result.payUrl != null && result.payUrl!.isNotEmpty) {
+      // 支付宝 H5 支付
+      try {
+        final uri = Uri.parse(result.payUrl!);
+        if (uri.scheme.startsWith('https') || uri.scheme.startsWith('alipays')) {
+          final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+          if (!launched && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('无法打开支付页面，请检查网络'), backgroundColor: AppColors.warn),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('支付链接异常'), backgroundColor: AppColors.error),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildFooterNote() {

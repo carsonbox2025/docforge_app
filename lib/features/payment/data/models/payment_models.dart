@@ -1,56 +1,125 @@
-// 支付模块数据模型 — 对接后端 OrderService
+// 支付模块数据模型 — 对接后端统一支付模块 (modules/payment)
 
-enum PaymentChannel { alipay, wechat }
+enum PaymentChannel {
+  huawei,
+  xiaomi,
+  oppo,
+  vivo,
+  honor,
+  alipay,
+  wechat;
 
-enum OrderStatus { pending, paid, refunded, expired }
+  bool get isIap =>
+      this == huawei ||
+      this == xiaomi ||
+      this == oppo ||
+      this == vivo ||
+      this == honor;
+}
+
+enum OrderStatus { pending, paid, delivered, refunded, expired, closed }
+
+enum ProductType { consumable, nonConsumable, subscription }
+
+class Product {
+  final String productId;
+  final String productType;
+  final String name;
+  final int priceCents;
+  final String currency;
+
+  const Product({
+    required this.productId,
+    required this.productType,
+    required this.name,
+    required this.priceCents,
+    this.currency = 'CNY',
+  });
+
+  factory Product.fromJson(Map<String, dynamic> json) => Product(
+        productId: json['product_id'] as String? ?? '',
+        productType: json['product_type'] as String? ?? 'consumable',
+        name: json['name'] as String? ?? '',
+        priceCents: json['price_cents'] as int? ?? 0,
+        currency: json['currency'] as String? ?? 'CNY',
+      );
+
+  String get displayPrice =>
+      '¥${(priceCents / 100).toStringAsFixed(priceCents % 100 == 0 ? 0 : 1)}';
+}
 
 class CreateOrderRequest {
+  final String appKey;
   final String channel;
-  final String? sceneId;
-  final int? documentId;
-  final String orderType; // per_doc / membership
+  final String productId;
 
   const CreateOrderRequest({
+    required this.appKey,
     required this.channel,
-    this.sceneId,
-    this.documentId,
-    required this.orderType,
+    required this.productId,
   });
 
   Map<String, dynamic> toJson() => {
+        'app_key': appKey,
         'channel': channel,
-        if (sceneId != null) 'scene_id': sceneId,
-        if (documentId != null) 'document_id': documentId,
-        'order_type': orderType,
+        'product_id': productId,
+      };
+}
+
+class VerifyRequest {
+  final String appKey;
+  final String receiptData;
+
+  const VerifyRequest({required this.appKey, required this.receiptData});
+
+  Map<String, dynamic> toJson() => {
+        'app_key': appKey,
+        'receipt_data': receiptData,
       };
 }
 
 class OrderRecord {
   final String orderNo;
+  final String productId;
+  final String productType;
   final int amountCents;
   final String status;
-  final String? paidAt;
+  final String channel;
   final String? payUrl;
+  final Map<String, String>? payParams;
+  final String? paidAt;
+  final String? createdAt;
 
   const OrderRecord({
     required this.orderNo,
+    this.productId = '',
+    this.productType = 'consumable',
     required this.amountCents,
     required this.status,
-    this.paidAt,
+    this.channel = 'alipay',
     this.payUrl,
+    this.payParams,
+    this.paidAt,
+    this.createdAt,
   });
 
   factory OrderRecord.fromJson(Map<String, dynamic> json) => OrderRecord(
         orderNo: json['order_no'] as String? ?? '',
+        productId: json['product_id'] as String? ?? '',
+        productType: json['product_type'] as String? ?? 'consumable',
         amountCents: json['amount_cents'] as int? ?? 0,
         status: json['status'] as String? ?? 'pending',
-        paidAt: json['paid_at'] as String?,
+        channel: json['channel'] as String? ?? 'alipay',
         payUrl: json['pay_url'] as String?,
+        payParams: (json['pay_params'] as Map<String, dynamic>?)
+            ?.map((k, v) => MapEntry(k, v.toString())),
+        paidAt: json['paid_at'] as String?,
+        createdAt: json['created_at'] as String?,
       );
 
   String get displayAmount =>
       '¥${(amountCents / 100).toStringAsFixed(amountCents % 100 == 0 ? 0 : 1)}';
-  bool get isPaid => status == 'paid';
+  bool get isPaid => status == 'paid' || status == 'delivered';
   bool get isPending => status == 'pending';
 }
 
@@ -74,7 +143,8 @@ class QuotaInfo {
   factory QuotaInfo.fromJson(Map<String, dynamic> json) {
     Map<String, int> parseMap(dynamic raw) {
       if (raw is Map) {
-        return raw.map((k, v) => MapEntry(k.toString(), (v is int ? v : int.tryParse(v.toString()) ?? 0)));
+        return raw.map((k, v) =>
+            MapEntry(k.toString(), (v is int ? v : int.tryParse(v.toString()) ?? 0)));
       }
       return {};
     }
@@ -89,21 +159,18 @@ class QuotaInfo {
     );
   }
 
-  /// 月配额剩余（-1 = 不限）
   int monthlyRemaining(String sceneId) {
     final limit = quotas[sceneId] ?? 0;
     if (limit == -1) return -1;
     return limit - (used[sceneId] ?? 0);
   }
 
-  /// 日配额剩余（日限不存在 = 不限）
   int dailyRemaining(String sceneId) {
     final limit = dailyQuotas[sceneId];
-    if (limit == null) return -1; // 无日限
+    if (limit == null) return -1;
     return limit - (dailyUsed[sceneId] ?? 0);
   }
 
-  /// 综合剩余 = min(日剩余, 月剩余)，任一为 -1 则取另一个
   int remaining(String sceneId) {
     final dr = dailyRemaining(sceneId);
     final mr = monthlyRemaining(sceneId);
@@ -112,13 +179,11 @@ class QuotaInfo {
     return dr < mr ? dr : mr;
   }
 
-  /// 日配额是否耗尽
   bool isDailyExhausted(String sceneId) {
     final dr = dailyRemaining(sceneId);
     return dr != -1 && dr <= 0;
   }
 
-  /// 月配额是否耗尽
   bool isMonthlyExhausted(String sceneId) {
     final mr = monthlyRemaining(sceneId);
     return mr != -1 && mr <= 0;
@@ -131,6 +196,7 @@ class QuotaInfo {
         'free' => '免费版',
         'monthly' => '月度会员',
         'yearly' => '年度会员',
+        'lifetime' => '终身会员',
         _ => planType,
       };
 
