@@ -169,12 +169,40 @@ class _InputStageState extends ConsumerState<_InputStage> {
 // Stage 2: Reviewing (进度)
 // ═══════════════════════════════════════════════════════
 
-class _ReviewingStage extends ConsumerWidget {
+class _ReviewingStage extends ConsumerStatefulWidget {
   const _ReviewingStage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ReviewingStage> createState() => _ReviewingStageState();
+}
+
+class _ReviewingStageState extends ConsumerState<_ReviewingStage> {
+  final ScrollController _outputScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _outputScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(polishProvider);
+
+    // agentOutput 变化时自动滚动到底部
+    ref.listen<PolishState>(polishProvider, (prev, next) {
+      if (prev?.agentOutput != next.agentOutput && next.agentOutput.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_outputScrollController.hasClients) {
+            _outputScrollController.animateTo(
+              _outputScrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
+    });
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -197,6 +225,72 @@ class _ReviewingStage extends ConsumerWidget {
                     message: state.progressMsg,
                   ),
                   const SizedBox(height: AppSpacing.xl),
+
+                  // AI 审阅过程
+                  if (state.agentOutput.isNotEmpty) ...[
+                    _SectionLabel('AI 审阅过程'),
+                    const SizedBox(height: AppSpacing.sm),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E1E),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      child: Builder(builder: (context) {
+                        final lines = state.agentOutput.split('\n');
+                        return ListView.builder(
+                          controller: _outputScrollController,
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.all(12),
+                          itemCount: lines.length,
+                          itemBuilder: (_, i) {
+                            final line = lines[i];
+                            final isLatest = i == lines.length - 1;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '> ',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontFamily: 'monospace',
+                                    color: AppColors.success.withValues(alpha: 0.6),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    line,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontFamily: 'monospace',
+                                      color: isLatest
+                                          ? AppColors.success
+                                          : AppColors.textMuted.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ),
+                                if (isLatest) ...[
+                                  const SizedBox(width: 6),
+                                  SizedBox(
+                                    width: 8,
+                                    height: 8,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      color: AppColors.success.withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    }),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
 
                   // 章节大纲（大文档）
                   if (state.outline.isNotEmpty) ...[

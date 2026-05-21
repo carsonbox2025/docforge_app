@@ -37,6 +37,9 @@ class PolishState {
   // 原始段落
   final List<SourceParagraph> originalParagraphs;
 
+  // Agent 实时输出（审阅过程文本）
+  final String agentOutput;
+
   // 任务/文档 ID
   final int? taskId;
   final int? documentId;
@@ -72,6 +75,7 @@ class PolishState {
     this.filterStatus = 'pending',
     this.currentSuggestionIndex = -1,
     this.originalParagraphs = const [],
+    this.agentOutput = '',
     this.taskId,
     this.documentId,
     this.sourceFileUrl,
@@ -103,6 +107,7 @@ class PolishState {
     String? filterStatus,
     int? currentSuggestionIndex,
     List<SourceParagraph>? originalParagraphs,
+    String? agentOutput,
     int? taskId,
     int? documentId,
     String? sourceFileUrl,
@@ -136,6 +141,7 @@ class PolishState {
       filterStatus: filterStatus ?? this.filterStatus,
       currentSuggestionIndex: currentSuggestionIndex ?? this.currentSuggestionIndex,
       originalParagraphs: originalParagraphs ?? this.originalParagraphs,
+      agentOutput: agentOutput ?? this.agentOutput,
       taskId: taskId ?? this.taskId,
       documentId: documentId ?? this.documentId,
       sourceFileUrl: sourceFileUrl ?? this.sourceFileUrl,
@@ -396,6 +402,27 @@ class PolishNotifier extends StateNotifier<PolishState> {
   }
 
   void _handleDetail(Map<String, dynamic> detail) {
+    // 原始段落（首次推送，仅当前端尚未持有时填充）
+    final rawParagraphs = detail['original_paragraphs'] as List<dynamic>?;
+    if (rawParagraphs != null && state.originalParagraphs.isEmpty) {
+      final paragraphs = rawParagraphs
+          .map((p) => SourceParagraph.fromJson(p as Map<String, dynamic>))
+          .toList();
+      state = state.copyWith(originalParagraphs: paragraphs);
+    }
+
+    // Agent 实时输出文本
+    final agentOutputData = detail['agent_output'] as Map<String, dynamic>?;
+    if (agentOutputData != null) {
+      final text = agentOutputData['text'] as String? ?? '';
+      if (text.isNotEmpty) {
+        final newOutput = state.agentOutput.isEmpty
+            ? text
+            : '${state.agentOutput}\n$text';
+        state = state.copyWith(agentOutput: newOutput);
+      }
+    }
+
     // 建议更新
     final suggestionsUpdate = detail['suggestions_update'] as Map<String, dynamic>?;
     if (suggestionsUpdate != null) {
@@ -542,6 +569,7 @@ class PolishNotifier extends StateNotifier<PolishState> {
       suggestions: [],
       outline: [],
       originalParagraphs: [],
+      agentOutput: '',
       undoStack: [],
       undoStackPointer: 0,
       progress: 0,

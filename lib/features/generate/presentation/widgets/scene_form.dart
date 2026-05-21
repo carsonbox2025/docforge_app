@@ -33,24 +33,28 @@ class SceneDynamicForm extends StatelessWidget {
     switch (field.type) {
       case 'select':
         return _SelectField(
+          key: ValueKey(field.name),
           field: field,
           value: fieldValues[field.name] ?? '',
           onChanged: (v) => onChanged(field.name, v),
         );
       case 'date':
         return _DateField(
+          key: ValueKey(field.name),
           field: field,
           value: fieldValues[field.name] ?? '',
           onChanged: (v) => onChanged(field.name, v),
         );
       case 'textarea':
         return _TextAreaField(
+          key: ValueKey(field.name),
           field: field,
           value: fieldValues[field.name] ?? '',
           onChanged: (v) => onChanged(field.name, v),
         );
       default:
         return _TextField(
+          key: ValueKey(field.name),
           field: field,
           value: fieldValues[field.name] ?? '',
           onChanged: (v) => onChanged(field.name, v),
@@ -66,6 +70,7 @@ class _TextField extends StatefulWidget {
   final ValueChanged<String> onChanged;
 
   const _TextField({
+    super.key,
     required this.field,
     required this.value,
     required this.onChanged,
@@ -148,6 +153,7 @@ class _TextAreaField extends StatefulWidget {
   final ValueChanged<String> onChanged;
 
   const _TextAreaField({
+    super.key,
     required this.field,
     required this.value,
     required this.onChanged,
@@ -232,6 +238,7 @@ class _SelectField extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   const _SelectField({
+    super.key,
     required this.field,
     required this.value,
     required this.onChanged,
@@ -283,6 +290,7 @@ class _DateField extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   const _DateField({
+    super.key,
     required this.field,
     required this.value,
     required this.onChanged,

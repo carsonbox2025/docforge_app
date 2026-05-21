@@ -30,15 +30,13 @@ class _NotificationDetailPageState
   Future<void> _loadNotification() async {
     try {
       final ds = NotificationDataSource();
-      final result = await ds.getNotifications(pageSize: 200);
-      final items = (result['items'] as List? ?? [])
-          .map((e) => NotificationItem.fromApi(e as Map<String, dynamic>))
-          .toList();
+      final data = await ds.getNotificationById(widget.notificationId);
       if (!mounted) return;
-      final found = items.where((n) => n.id == widget.notificationId).firstOrNull;
-      if (found != null) {
-        ds.markAsRead(found.id);
-        setState(() { _item = found; _isLoading = false; });
+
+      if (data != null) {
+        final item = NotificationItem.fromApi(data);
+        ds.markAsRead(item.id);
+        setState(() { _item = item; _isLoading = false; });
       } else {
         setState(() { _error = '通知不存在'; _isLoading = false; });
       }

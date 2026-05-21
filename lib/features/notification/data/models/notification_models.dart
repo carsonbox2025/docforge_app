@@ -20,12 +20,11 @@ enum NotificationType {
   final Color bgColor;
 }
 
-/// 消息分类 Tab
+/// 消息分类 Tab（按已读状态）
 enum NotificationCategory {
-  all('全部'),
-  document('文档'),
-  system('系统'),
-  activity('活动');
+  unread('未读'),
+  read('已读'),
+  all('全部');
 
   const NotificationCategory(this.label);
   final String label;

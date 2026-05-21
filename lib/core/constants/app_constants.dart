@@ -95,6 +95,7 @@ class AppConstants {
   static const String notificationsUnreadCountUrl = '/notifications/unread-count';
   static const String notificationsReadAllUrl = '/notifications/read-all';
   static String notificationReadUrl(int id) => '/notifications/$id/read';
+  static String notificationDetailUrl(int id) => '/notifications/$id';
 
   // Feedback APIs
   static const String feedbackSubmitUrl = '/feedbacks';

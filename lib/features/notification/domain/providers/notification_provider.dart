@@ -8,7 +8,7 @@ class NotificationState {
   final bool isLoading;
 
   const NotificationState({
-    this.activeCategory = NotificationCategory.all,
+    this.activeCategory = NotificationCategory.unread,
     this.notifications = const [],
     this.isLoading = false,
   });
@@ -22,25 +22,12 @@ class NotificationState {
 
   List<NotificationItem> get filteredNotifications {
     switch (activeCategory) {
+      case NotificationCategory.unread:
+        return notifications.where((n) => !n.isRead).toList();
+      case NotificationCategory.read:
+        return notifications.where((n) => n.isRead).toList();
       case NotificationCategory.all:
         return notifications;
-      case NotificationCategory.document:
-        return notifications.where((n) =>
-            n.type == NotificationType.docGenerated ||
-            n.type == NotificationType.docPolished ||
-            n.type == NotificationType.docTranslated ||
-            n.type == NotificationType.processFailed
-        ).toList();
-      case NotificationCategory.system:
-        return notifications.where((n) =>
-            n.type == NotificationType.quotaWarning ||
-            n.type == NotificationType.system
-        ).toList();
-      case NotificationCategory.activity:
-        return notifications.where((n) =>
-            n.type == NotificationType.friendRegistered ||
-            n.type == NotificationType.newTemplate
-        ).toList();
     }
   }
 

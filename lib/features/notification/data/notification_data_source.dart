@@ -28,6 +28,15 @@ class NotificationDataSource {
     }
   }
 
+  Future<Map<String, dynamic>?> getNotificationById(int id) async {
+    final response = await ApiClient.instance.get(
+      AppConstants.notificationDetailUrl(id),
+    );
+    final data = response.data['data'];
+    if (data == null) return null;
+    return data as Map<String, dynamic>;
+  }
+
   Future<void> markAsRead(int id) async {
     await ApiClient.instance.post(AppConstants.notificationReadUrl(id));
   }

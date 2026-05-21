@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/network/api_interceptor.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../scene/data/models/scene_models.dart';
 import '../../../scene/domain/providers/scene_provider.dart';
@@ -554,33 +553,7 @@ class _InputStageState extends ConsumerState<InputStage> {
   // ─── 场景切换 ───
 
   void _confirmAndSwitchScene(SceneConfig scene, GenerateNotifier notifier) {
-    final hasContent = _fieldValues.values.any((v) => v.trim().isNotEmpty) ||
-        _coverValues.values.any((v) => v.trim().isNotEmpty);
-
-    if (hasContent) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('切换场景'),
-          content: const Text('切换后当前填写的内容将被清空，确定要切换吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('继续填写'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _doSwitchScene(scene, notifier);
-              },
-              child: const Text('确定切换', style: TextStyle(color: AppColors.error)),
-            ),
-          ],
-        ),
-      );
-    } else {
-      _doSwitchScene(scene, notifier);
-    }
+    _doSwitchScene(scene, notifier);
   }
 
   void _doSwitchScene(SceneConfig scene, GenerateNotifier notifier) {

@@ -18,10 +18,10 @@ class NotificationPage extends ConsumerWidget {
       body: Column(
         children: [
           _buildHeader(context, ref, state),
-          _buildCategoryTabs(ref, state),
+          _buildStatusTabs(ref, state),
           Expanded(
             child: state.filteredNotifications.isEmpty
-                ? _buildEmptyState()
+                ? _buildEmptyState(state.activeCategory)
                 : _buildNotificationList(context, ref, state),
           ),
         ],
@@ -112,7 +112,7 @@ class NotificationPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildCategoryTabs(WidgetRef ref, NotificationState state) {
+  Widget _buildStatusTabs(WidgetRef ref, NotificationState state) {
     return Container(
       color: AppColors.surface,
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
@@ -180,43 +180,30 @@ class NotificationPage extends ConsumerWidget {
 
   int _getCategoryBadge(NotificationState state, NotificationCategory cat) {
     switch (cat) {
+      case NotificationCategory.unread:
+        return state.unreadCount;
+      case NotificationCategory.read:
+        return 0;
       case NotificationCategory.all:
         return state.unreadCount;
-      case NotificationCategory.document:
-        return state.notifications.where((n) =>
-            !n.isRead &&
-            (n.type == NotificationType.docGenerated ||
-                n.type == NotificationType.docPolished ||
-                n.type == NotificationType.docTranslated ||
-                n.type == NotificationType.processFailed)).length;
-      case NotificationCategory.system:
-        return state.notifications.where((n) =>
-            !n.isRead &&
-            (n.type == NotificationType.quotaWarning ||
-                n.type == NotificationType.system)).length;
-      case NotificationCategory.activity:
-        return state.notifications.where((n) =>
-            !n.isRead &&
-            (n.type == NotificationType.friendRegistered ||
-                n.type == NotificationType.newTemplate)).length;
     }
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(NotificationCategory category) {
+    final msg = switch (category) {
+      NotificationCategory.unread => '暂无未读消息',
+      NotificationCategory.read => '暂无已读消息',
+      NotificationCategory.all => '暂无消息',
+    };
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.notifications_none_outlined, size: 48, color: AppColors.textMuted),
           const SizedBox(height: 12),
-          const Text(
-            '暂无消息',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            '所有消息都已查阅',
-            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+          Text(
+            msg,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
           ),
         ],
       ),
@@ -231,7 +218,6 @@ class NotificationPage extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Group header
             Padding(
               padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
               child: Text(
@@ -243,7 +229,6 @@ class NotificationPage extends ConsumerWidget {
                 ),
               ),
             ),
-            // Notification items
             ...entry.value.map((item) => _NotificationCard(
               item: item,
               onTap: () {
@@ -256,7 +241,6 @@ class NotificationPage extends ConsumerWidget {
       }).toList(),
     );
   }
-
 }
 
 class _NotificationCard extends StatelessWidget {
@@ -275,12 +259,14 @@ class _NotificationCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(
+            color: item.isRead ? AppColors.border : AppColors.primary.withValues(alpha: 0.3),
+            width: item.isRead ? 1 : 1.5,
+          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icon
             Container(
               width: 38,
               height: 38,
@@ -291,34 +277,53 @@ class _NotificationCard extends StatelessWidget {
               child: Icon(item.type.icon, size: 20, color: item.type.color),
             ),
             const SizedBox(width: 12),
-            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
+                      // 消息类型标签
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: item.type.bgColor,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          item.type.label,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: item.type.color,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
                       if (!item.isRead)
                         Container(
                           width: 7,
                           height: 7,
-                          margin: const EdgeInsets.only(right: 6),
                           decoration: const BoxDecoration(
                             color: AppColors.primary,
                             shape: BoxShape.circle,
                           ),
                         ),
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w700,
-                            color: AppColors.text,
-                          ),
-                        ),
+                      const Spacer(),
+                      Text(
+                        item.time,
+                        style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    item.title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w700,
+                      color: AppColors.text,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -331,15 +336,10 @@ class _NotificationCard extends StatelessWidget {
                       height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text(
-                        item.time,
-                        style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-                      ),
-                      const Spacer(),
-                      if (item.actionLabel != null)
+                  if (item.actionLabel != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
                         Text(
                           item.actionLabel!,
                           style: const TextStyle(
@@ -348,8 +348,11 @@ class _NotificationCard extends StatelessWidget {
                             color: AppColors.primary,
                           ),
                         ),
-                    ],
-                  ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.primary),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
