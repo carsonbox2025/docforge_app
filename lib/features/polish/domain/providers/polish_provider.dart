@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -317,9 +318,22 @@ class PolishNotifier extends StateNotifier<PolishState> {
     );
 
     try {
+      // upload 模式：先上传文件到服务器，获取服务器端 file_path
+      String? serverFilePath = state.filePath;
+      if (state.inputMode == InputMode.upload && hasFile) {
+        state = state.copyWith(progressMsg: '正在上传文件...');
+        final file = File(state.filePath!);
+        final uploadResult = await _dataSource.uploadFile(file);
+        serverFilePath = uploadResult['file_path'] as String?;
+        if (serverFilePath == null || serverFilePath!.isEmpty) {
+          throw Exception('服务器未返回文件路径');
+        }
+        state = state.copyWith(progressMsg: '文件上传成功，正在审阅...');
+      }
+
       final request = PolishRequest(
         text: text,
-        filePath: state.filePath,
+        filePath: serverFilePath,
         inputMode: state.inputMode,
         level: state.level,
         docType: state.docType,

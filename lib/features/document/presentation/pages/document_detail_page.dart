@@ -1,14 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/storage/secure_storage.dart';
 import '../../../../shared/utils/file_export.dart';
-import '../../../../shared/models/dsl/dsl_node.dart';
-import '../../../../shared/widgets/dsl/dsl_renderer.dart';
 import '../../data/document_data_source.dart';
 import '../../data/models/document_models.dart';
 import '../../domain/providers/document_provider.dart';
@@ -22,23 +22,20 @@ class DocumentDetailPage extends ConsumerStatefulWidget {
 }
 
 class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
-  List<DslNode> _nodes = [];
-  List<DslOutline> _outline = [];
-  bool _isStreaming = false;
+  WebViewController? _webViewController;
+  bool _webViewLoading = true;
+  bool _webViewError = false;
   bool _initialized = false;
-  Timer? _debounceTimer;
 
   @override
   void initState() {
     super.initState();
-    // 从当前缓存状态主动解析（Provider 可能已有缓存数据）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final state = ref.read(documentDetailProvider(widget.docId));
       final doc = state.document;
-      if (doc != null && !_initialized) {
-        _initialized = true;
-        _updateFromDocument(doc);
+      if (doc != null && doc.status == DocStatus.completed) {
+        _initWebView();
       }
     });
   }
@@ -51,10 +48,10 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
     ref.listen(documentDetailProvider(widget.docId), (prev, next) {
       final d = next.document;
       if (d == null) return;
-      _debounceTimer?.cancel();
-      _debounceTimer = Timer(const Duration(milliseconds: 100), () {
-        if (mounted) _updateFromDocument(d);
-      });
+      // 完成时初始化 WebView
+      if (d.status == DocStatus.completed && _webViewController == null) {
+        _initWebView();
+      }
     });
 
     return Scaffold(
@@ -158,13 +155,24 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
       return Column(
         children: [
           _buildProgressHeader(doc),
-          Expanded(child: _buildContent()),
+          const Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(strokeWidth: 2),
+                  SizedBox(height: 12),
+                  Text('AI 正在处理...', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+                ],
+              ),
+            ),
+          ),
         ],
       );
     }
 
-    // 已完成 / 已取消
-    return _buildContent();
+    // 已完成 / 已取消 — WebView HTML 预览
+    return _buildWebViewContent();
   }
 
   Widget _buildProgressHeader(DocForgeDocument doc) {
@@ -202,170 +210,102 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
     );
   }
 
-  Widget _buildContent() {
-    if (_nodes.isEmpty && _outline.isEmpty) {
-      if (_isStreaming) {
-        return const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(strokeWidth: 2),
-              SizedBox(height: 12),
-              Text('AI 正在思考...', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
-            ],
-          ),
-        );
-      }
+  Widget _buildWebViewContent() {
+    if (_webViewController == null) {
       return const Center(
-        child: Text('暂无内容', style: TextStyle(fontSize: 14, color: AppColors.textMuted)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(strokeWidth: 2),
+            SizedBox(height: 12),
+            Text('正在加载预览...', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+          ],
+        ),
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: DslRenderer(nodes: _nodes, isStreaming: _isStreaming),
+    return Stack(
+      children: [
+        WebViewWidget(controller: _webViewController!),
+        if (_webViewError)
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: AppColors.textMuted),
+                const SizedBox(height: 12),
+                const Text('预览加载失败', style: TextStyle(fontSize: 14, color: AppColors.textMuted)),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() { _webViewError = false; _webViewLoading = true; });
+                    _initWebView();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('重试'),
+                ),
+              ],
+            ),
+          ),
+        if (_webViewLoading && !_webViewError)
+          const Center(child: CircularProgressIndicator()),
+      ],
     );
   }
 
-  void _updateFromDocument(DocForgeDocument doc) {
-    _isStreaming = doc.status == DocStatus.running || doc.status == DocStatus.pending;
+  // SECURITY DEBT: token 通过 URL query 参数传递，会被 WebView 缓存和服务器 access log 记录。
+  // 短期方案：当前 WebView 已限制导航域。长期应改为后端短期一次性 ticket 或 cookie 注入。
+  Future<void> _initWebView() async {
+    if (_initialized) return;
 
-    // 已完成：从 dslContent 提取（优先用最终数据）
-    if (doc.status.isTerminal && doc.dslContent != null) {
-      _sectionNodes.clear();
-      _sectionTitles.clear();
-      _parseDslContent(doc.dslContent);
-      setState(() {});
-      return;
+    final token = await SecureStorage.instance.getToken();
+    final baseUrl = '${AppConstants.apiBasePath}/preview/${widget.docId}/html';
+    Uri uri = Uri.parse(baseUrl);
+    if (token != null) {
+      uri = uri.replace(queryParameters: {...uri.queryParameters, 'token': token});
     }
 
-    // 进行中：从 progressDetail 中提取 dsl_update
-    final detail = doc.progressDetail;
-    if (detail != null) {
-      final dslUpdate = detail['dsl_update'] as Map<String, dynamic>?;
-      if (dslUpdate != null) {
-        _applyDslUpdate(dslUpdate);
-      }
-    }
-
-    setState(() {});
-  }
-
-  /// section_id → nodes 累积器
-  final Map<String, List<DslNode>> _sectionNodes = {};
-  final Map<String, String> _sectionTitles = {};
-
-  void _applyDslUpdate(Map<String, dynamic> update) {
-    // outline
-    final outlineRaw = update['outline'] as List<dynamic>?;
-    if (outlineRaw != null) {
-      _outline = outlineRaw.map((e) => DslOutline.fromJson(e as Map<String, dynamic>)).toList();
-      for (final o in _outline) {
-        _sectionTitles.putIfAbsent(o.id, () => o.title);
-      }
-    }
-
-    // node_updates 是一个 List
-    final nodeUpdates = update['node_updates'] as List<dynamic>?;
-    if (nodeUpdates == null) return;
-
-    for (final entry in nodeUpdates) {
-      if (entry is! Map<String, dynamic>) continue;
-      final op = entry['op'] as String?;
-      final sid = entry['section'] as String? ?? 'main';
-
-      if (op == 'replace_all') {
-        final nodesRaw = entry['nodes'] as List<dynamic>? ?? [];
-        _sectionNodes[sid] = nodesRaw
-            .map((e) => DslNode.fromJson(e as Map<String, dynamic>))
-            .toList();
-      } else if (op == 'append') {
-        final node = entry['node'] as Map<String, dynamic>?;
-        if (node != null) {
-          _sectionNodes.putIfAbsent(sid, () => []);
-          _sectionNodes[sid]!.add(DslNode.fromJson(node));
-        }
-      }
-    }
-
-    _rebuildNodes();
-  }
-
-  void _rebuildNodes() {
-    final result = <DslNode>[];
-
-    // 如果只有一个 section 且是 main，扁平输出
-    if (_sectionNodes.length == 1 && _sectionNodes.containsKey('main')) {
-      result.addAll(_sectionNodes['main']!);
-    } else if (_outline.isNotEmpty) {
-      // 按 outline 顺序输出 section
-      for (final o in _outline) {
-        final nodes = _sectionNodes[o.id];
-        if (nodes != null && nodes.isNotEmpty) {
-          result.add(DslNode(
-            type: DslNodeType.section,
-            id: o.id,
-            title: _sectionTitles[o.id] ?? o.title,
-            children: nodes,
-          ));
-        }
-      }
-      // 补充 outline 之外的 section
-      for (final sid in _sectionNodes.keys) {
-        if (_outline.any((o) => o.id == sid)) continue;
-        final nodes = _sectionNodes[sid]!;
-        if (nodes.isNotEmpty) {
-          result.add(DslNode(
-            type: DslNodeType.section,
-            id: sid,
-            title: _sectionTitles[sid] ?? '',
-            children: nodes,
-          ));
-        }
-      }
-    } else {
-      // 无 outline，按插入顺序输出
-      for (final entry in _sectionNodes.entries) {
-        if (entry.value.isNotEmpty) {
-          result.add(DslNode(
-            type: DslNodeType.section,
-            id: entry.key,
-            title: _sectionTitles[entry.key] ?? '',
-            children: entry.value,
-          ));
-        }
-      }
-    }
-
-    _nodes = result;
-  }
-
-  void _parseDslContent(dynamic dslContent) {
-    if (dslContent == null) return;
+    final allowedHost = uri.host;
     try {
-      Map<String, dynamic> dsl;
-      if (dslContent is String) {
-        dsl = jsonDecode(dslContent) as Map<String, dynamic>;
-      } else {
-        dsl = dslContent as Map<String, dynamic>;
-      }
-
-      // 后端 _build_document_node 输出 children（不是 sections）
-      final childrenRaw = dsl['children'] as List<dynamic>? ?? [];
-      final allNodes = <DslNode>[];
-      for (final child in childrenRaw) {
-        final c = child as Map<String, dynamic>;
-        allNodes.add(DslNode.fromJson(c));
-      }
-      _nodes = allNodes;
+      _initialized = true;
+      _webViewController = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.disabled)
+        ..setNavigationDelegate(NavigationDelegate(
+          onNavigationRequest: (request) {
+            try {
+              final reqHost = Uri.parse(request.url).host;
+              if (reqHost != allowedHost && reqHost.isNotEmpty) {
+                return NavigationDecision.prevent;
+              }
+            } catch (_) {
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+          onPageFinished: (_) {
+            if (mounted) setState(() => _webViewLoading = false);
+          },
+          onWebResourceError: (e) {
+            if (mounted) setState(() {
+              _webViewLoading = false;
+              _webViewError = true;
+              _initialized = false;
+            });
+          },
+        ))
+        ..loadRequest(uri);
+      if (mounted) setState(() {});
     } catch (e) {
-      debugPrint('[DocumentDetail] parseDslContent error: $e');
+      if (mounted) setState(() { _webViewLoading = false; _webViewError = true; _initialized = false; });
     }
   }
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
+    _webViewController = null;
     super.dispose();
   }
 

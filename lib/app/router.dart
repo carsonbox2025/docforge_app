@@ -26,7 +26,6 @@ import '../features/profile/presentation/pages/about_page.dart';
 import '../features/draft/presentation/pages/drafts_page.dart';
 import '../features/auth/presentation/pages/legal_page.dart';
 import '../features/feedback/presentation/pages/feedback_page.dart';
-import '../shared/widgets/html_preview_page.dart';
 import 'shell.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -135,14 +134,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
         return _fastFadePage(DocumentDetailPage(docId: id), ValueKey('doc-$id'));
       }),
-      GoRoute(
-        path: '/preview/:id',
-        pageBuilder: (_, state) {
-          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
-          final title = state.uri.queryParameters['title'] ?? '文档预览';
-          return _fastFadePage(HtmlPreviewPage(documentId: id, title: title), ValueKey('preview-$id'));
-        },
-      ),
       GoRoute(path: '/glossary', pageBuilder: (_, _) => _fastFadePage(const GlossaryPage(), const ValueKey('glossary'))),
       GoRoute(path: '/search', pageBuilder: (_, _) => _fastFadePage(const SearchPage(), const ValueKey('search'))),
       GoRoute(path: '/settings', pageBuilder: (_, _) => _fastFadePage(const SettingsPage(), const ValueKey('settings'))),
