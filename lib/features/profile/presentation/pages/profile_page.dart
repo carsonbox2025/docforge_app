@@ -280,8 +280,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   // ─── Stats row ─────────────────────────────────────────────────────────────
 
   Widget _buildStatsRow(QuotaState quotaState) {
-    final stats = quotaState.stats;
-
     if (quotaState.isLoading) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
@@ -295,8 +293,24 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       );
     }
 
-    // 空态引导
-    final hasData = stats != null && (stats.generateCount > 0 || stats.polishCount > 0);
+    final quota = quotaState.data;
+    if (quota == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: Center(
+          child: GestureDetector(
+            onTap: () => context.go('/generate'),
+            child: Text('开始你的第一篇文档 →',
+              style: const TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      );
+    }
+
+    // 从配额数据聚合统计
+    final generateTotal = quota.used['scene_generic'] ?? 0;
+    final polishTotal = (quota.used['scene_polish'] ?? 0) + (quota.used['scene_polish_long'] ?? 0);
+    final hasData = generateTotal > 0 || polishTotal > 0;
     if (!hasData) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
@@ -314,11 +328,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: Row(
         children: [
-          _buildStatItem('${stats.generateCount}', '生成文档'),
+          _buildStatItem('$generateTotal', '生成文档'),
           _buildStatDivider(),
-          _buildStatItem('${stats.polishCount}', '精修次数'),
+          _buildStatItem('$polishTotal', '精修次数'),
           _buildStatDivider(),
-          _buildStatItem(stats.wordCountDisplay, '字数'),
+          _buildStatItem(quota.planLabel, '当前套餐'),
         ],
       ),
     );
@@ -357,7 +371,16 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   // ─── Quota card (floating) ─────────────────────────────────────────────────
 
   Widget _buildQuotaCard(QuotaState quotaState) {
-    final stats = quotaState.stats;
+    final quota = quotaState.data;
+
+    // 计算月度总剩余配额（不混入日限）
+    int totalRemaining = 0;
+    if (quota != null) {
+      for (final sceneId in quota.quotas.keys) {
+        final mr = quota.monthlyRemaining(sceneId);
+        if (mr > 0) totalRemaining += mr;
+      }
+    }
 
     return Transform.translate(
       offset: const Offset(0, -14),
@@ -377,12 +400,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         ),
         child: quotaState.isLoading
             ? Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted)))
-            : Row(
-                children: [
-                  _buildQuotaItem('${stats?.remainingQuota ?? 0}', '剩余配额', AppColors.success, AppColors.successBg),
-                  _buildQuotaItem('—', '模板收藏', AppColors.primary, AppColors.primaryBg),
-                  _buildQuotaItem('—', '术语表', AppColors.cta, AppColors.ctaBg),
-                ],
+            : GestureDetector(
+                onTap: () => context.push('/usage'),
+                child: Row(
+                  children: [
+                    _buildQuotaItem('$totalRemaining', '剩余配额', AppColors.success, AppColors.successBg),
+                    _buildQuotaItem('—', '模板收藏', AppColors.primary, AppColors.primaryBg),
+                    _buildQuotaItem('—', '术语表', AppColors.cta, AppColors.ctaBg),
+                  ],
+                ),
               ),
       ),
     );

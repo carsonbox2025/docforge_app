@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/feature_header.dart';
@@ -36,11 +37,88 @@ class PolishPage extends ConsumerWidget {
 // Stage 1: Input
 // ═══════════════════════════════════════════════════════
 
-class _InputStage extends ConsumerWidget {
+class _InputStage extends ConsumerStatefulWidget {
   const _InputStage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_InputStage> createState() => _InputStageState();
+}
+
+class _InputStageState extends ConsumerState<_InputStage> {
+  @override
+  void initState() {
+    super.initState();
+    ref.listenManual(polishProvider, (prev, next) {
+      if (next.errorMessage == 'QUOTA_EXCEEDED' &&
+          (prev == null || prev.errorMessage != 'QUOTA_EXCEEDED')) {
+        _showQuotaExceededDialog();
+      }
+    });
+  }
+
+  void _showQuotaExceededDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+                ),
+                const Icon(Icons.lock_outline, size: 40, color: AppColors.textMuted),
+                const SizedBox(height: 16),
+                const Text('额度不足', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
+                const SizedBox(height: 8),
+                const Text('今日/当月精修次数已用完', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+                const SizedBox(height: 20),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    context.push('/subscription');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFF57C00)]),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.workspace_premium_outlined, size: 18, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('升级会员 ¥9.9/月 · 畅享精修', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('稍后再说', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(polishProvider);
     final notifier = ref.read(polishProvider.notifier);
 

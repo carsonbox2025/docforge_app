@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:dio/dio.dart';
 import '../../data/models/polish_models.dart';
 import '../../data/polish_data_source.dart';
 import '../../../generate/data/task_data_source.dart';
 import '../../../../shared/utils/file_export.dart';
+import '../../../../core/network/api_interceptor.dart';
 
 class PolishState {
   final PolishStage stage;
@@ -327,6 +329,14 @@ class PolishNotifier extends StateNotifier<PolishState> {
       final taskId = await _dataSource.submitPolishTask(request);
       state = state.copyWith(taskId: taskId);
       _listenProgress(taskId);
+    } on DioException catch (e) {
+      final isQuotaExceeded = e.error is QuotaExceededException;
+      debugPrint('[Polish] submit error: $e (quota=$isQuotaExceeded)');
+      state = state.copyWith(
+        isProcessing: false,
+        stage: PolishStage.input,
+        errorMessage: isQuotaExceeded ? 'QUOTA_EXCEEDED' : '提交失败: $e',
+      );
     } catch (e) {
       debugPrint('[Polish] submit error: $e');
       state = state.copyWith(

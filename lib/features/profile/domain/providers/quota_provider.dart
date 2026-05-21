@@ -1,34 +1,31 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/quota_data_source.dart';
+import '../../../payment/data/models/payment_models.dart';
 
 class QuotaState {
-  final QuotaUsage? data;
-  final UserStats? stats;
+  final QuotaInfo? data;
   final bool isLoading;
   final String? error;
 
   const QuotaState({
     this.data,
-    this.stats,
     this.isLoading = false,
     this.error,
   });
 
   QuotaState copyWith({
-    QuotaUsage? data,
-    UserStats? stats,
+    QuotaInfo? data,
     bool? isLoading,
     String? error,
   }) {
     return QuotaState(
       data: data ?? this.data,
-      stats: stats ?? this.stats,
       isLoading: isLoading ?? this.isLoading,
       error: error,
     );
   }
 
-  bool get isPro => data != null;
+  bool get isPro => data?.isPro ?? false;
 }
 
 class QuotaNotifier extends StateNotifier<QuotaState> {
@@ -41,10 +38,9 @@ class QuotaNotifier extends StateNotifier<QuotaState> {
   Future<void> loadQuota() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final usage = await _dataSource.getQuotaUsage();
-      final stats = await _dataSource.getStats();
+      final quota = await _dataSource.getQuota();
       if (!mounted) return;
-      state = state.copyWith(data: usage, stats: stats, isLoading: false);
+      state = state.copyWith(data: quota, isLoading: false);
     } catch (e) {
       if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());

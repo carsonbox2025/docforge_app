@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/storage/local_cache.dart';
@@ -9,7 +10,7 @@ import '../../../scene/data/models/scene_models.dart';
 import '../../data/models/payment_models.dart';
 import '../../domain/providers/payment_provider.dart';
 
-/// 支付墙弹窗 — 付费场景点击"生成"时弹出
+/// 支付墙弹窗 — 月额度耗尽时弹出，提供单次购买或升级会员
 class PayWall extends ConsumerStatefulWidget {
   final SceneConfig scene;
   final VoidCallback onPaid;
@@ -68,7 +69,10 @@ class _PayWallState extends ConsumerState<PayWall> {
               const SizedBox(height: 16),
               // 场景 + 定价
               _buildPriceCard(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
+              // 会员升级入口
+              _buildMembershipHint(),
+              const SizedBox(height: 16),
               // 渠道选择（idle / paying 态显示）
               if (_step == _PayStep.idle || _step == _PayStep.paying)
                 _buildChannelSelector(),
@@ -106,8 +110,39 @@ class _PayWallState extends ConsumerState<PayWall> {
     }
     return Text(
       _step == _PayStep.waiting || _step == _PayStep.confirming
-          ? '等待支付确认' : '确认支付',
+          ? '等待支付确认' : '额度不足',
       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text),
+    );
+  }
+
+  Widget _buildMembershipHint() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).pop();
+        context.push('/subscription');
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF9800), Color(0xFFF57C00)],
+          ),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.workspace_premium_outlined, size: 18, color: Colors.white),
+            const SizedBox(width: 8),
+            const Text(
+              '升级会员 ¥9.9/月 · 全场景畅用',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, size: 18, color: Colors.white70),
+          ],
+        ),
+      ),
     );
   }
 

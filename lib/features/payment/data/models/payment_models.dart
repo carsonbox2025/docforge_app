@@ -59,18 +59,19 @@ class QuotaInfo {
   final String? expiresAt;
   final Map<String, int> quotas;
   final Map<String, int> used;
+  final Map<String, int> dailyQuotas;
+  final Map<String, int> dailyUsed;
 
   const QuotaInfo({
     required this.planType,
     this.expiresAt,
     this.quotas = const {},
     this.used = const {},
+    this.dailyQuotas = const {},
+    this.dailyUsed = const {},
   });
 
   factory QuotaInfo.fromJson(Map<String, dynamic> json) {
-    final quotasRaw = json['quotas'];
-    final usedRaw = json['used'];
-
     Map<String, int> parseMap(dynamic raw) {
       if (raw is Map) {
         return raw.map((k, v) => MapEntry(k.toString(), (v is int ? v : int.tryParse(v.toString()) ?? 0)));
@@ -81,13 +82,47 @@ class QuotaInfo {
     return QuotaInfo(
       planType: json['plan_type'] as String? ?? 'free',
       expiresAt: json['expires_at'] as String?,
-      quotas: parseMap(quotasRaw),
-      used: parseMap(usedRaw),
+      quotas: parseMap(json['quotas']),
+      used: parseMap(json['used']),
+      dailyQuotas: parseMap(json['daily_quotas']),
+      dailyUsed: parseMap(json['daily_used']),
     );
   }
 
-  int remaining(String sceneId) =>
-      (quotas[sceneId] ?? 0) - (used[sceneId] ?? 0);
+  /// 月配额剩余（-1 = 不限）
+  int monthlyRemaining(String sceneId) {
+    final limit = quotas[sceneId] ?? 0;
+    if (limit == -1) return -1;
+    return limit - (used[sceneId] ?? 0);
+  }
+
+  /// 日配额剩余（日限不存在 = 不限）
+  int dailyRemaining(String sceneId) {
+    final limit = dailyQuotas[sceneId];
+    if (limit == null) return -1; // 无日限
+    return limit - (dailyUsed[sceneId] ?? 0);
+  }
+
+  /// 综合剩余 = min(日剩余, 月剩余)，任一为 -1 则取另一个
+  int remaining(String sceneId) {
+    final dr = dailyRemaining(sceneId);
+    final mr = monthlyRemaining(sceneId);
+    if (dr == -1) return mr;
+    if (mr == -1) return dr;
+    return dr < mr ? dr : mr;
+  }
+
+  /// 日配额是否耗尽
+  bool isDailyExhausted(String sceneId) {
+    final dr = dailyRemaining(sceneId);
+    return dr != -1 && dr <= 0;
+  }
+
+  /// 月配额是否耗尽
+  bool isMonthlyExhausted(String sceneId) {
+    final mr = monthlyRemaining(sceneId);
+    return mr != -1 && mr <= 0;
+  }
 
   bool get isYearly => planType == 'yearly';
   bool get isPro => planType != 'free';
@@ -104,5 +139,7 @@ class QuotaInfo {
         'expires_at': expiresAt,
         'quotas': quotas,
         'used': used,
+        'daily_quotas': dailyQuotas,
+        'daily_used': dailyUsed,
       };
 }

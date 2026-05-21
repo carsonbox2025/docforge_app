@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_interceptor.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../scene/data/models/scene_models.dart';
 import '../../../scene/domain/providers/scene_provider.dart';
@@ -402,16 +403,33 @@ class _InputStageState extends ConsumerState<InputStage> {
     );
   }
 
-  /// 生成按钮回调 — 支付拦截
+  /// 生成按钮回调 — 额度检查 + 支付拦截
   Future<void> _handleGenerate(
     SceneConfig? scene,
     GenerateNotifier notifier,
   ) async {
     notifier.updateFormFields({..._fieldValues});
-    if (scene != null && !scene.pricing.isFree) {
+
+    if (scene != null) {
       try {
         final quota = await ref.read(quotaProvider.future);
-        if (!quota.isYearly && quota.remaining(scene.sceneId) <= 0) {
+
+        // 日限额耗尽 → 提示明天再来
+        if (quota.isDailyExhausted(scene.sceneId)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('今日使用次数已用完，请明天再试'),
+                backgroundColor: AppColors.warn,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
+
+        // 月限额耗尽 → 弹出付费墙
+        if (quota.isMonthlyExhausted(scene.sceneId)) {
           if (mounted) {
             PayWall.show(
               context,
@@ -428,7 +446,24 @@ class _InputStageState extends ConsumerState<InputStage> {
         // 配额查询失败，允许继续（后端会做最终检查）
       }
     }
+
     notifier.startGenerate();
+
+    // 后端返回 403 额度不足时，generate_provider 会设置 error='QUOTA_EXCEEDED'
+    // 通过 listener 监听状态变化，弹付费墙
+    ref.listenManual(generateProvider, (prev, next) {
+      if (next.error == 'QUOTA_EXCEEDED' && scene != null && mounted) {
+        notifier.clearError();
+        PayWall.show(
+          context,
+          scene: scene,
+          onPaid: () {
+            notifier.updateFormFields({..._fieldValues});
+            notifier.startGenerate();
+          },
+        );
+      }
+    });
   }
 
   // ─── 底部提示 ───

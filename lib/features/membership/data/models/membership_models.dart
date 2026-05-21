@@ -1,7 +1,7 @@
 /// 套餐类型
 enum PlanType {
-  monthly('monthly', 'Pro 月度会员', '¥29', '/月', 29, 1),
-  yearly('yearly', 'Pro 年度会员', '¥199', '/年', 199, 12),
+  monthly('monthly', 'Pro 月度会员', '¥9.9', '/月', 9.9, 1),
+  yearly('yearly', 'Pro 年度会员', '¥99', '/年', 99, 12),
   lifetime('lifetime', '终身会员', '¥499', '', 499, -1);
 
   const PlanType(this.code, this.label, this.price, this.period, this.priceNum, this.months);
@@ -10,7 +10,7 @@ enum PlanType {
   final String label;
   final String price;
   final String period;
-  final int priceNum;
+  final double priceNum;
   final int months;
 
   String get displayPrice => '$price$period';

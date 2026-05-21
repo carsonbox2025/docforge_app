@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/generate_data_source.dart';
@@ -7,6 +8,7 @@ import '../../data/task_data_source.dart';
 import '../../data/models/generate_models.dart';
 import '../../../../shared/models/dsl/dsl_node.dart' show DslNode, DslOutline;
 import '../../../../shared/utils/file_export.dart';
+import '../../../../core/network/api_interceptor.dart';
 import '../../../scene/data/models/scene_models.dart';
 
 void _log(String message) {
@@ -164,10 +166,12 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       _listenProgress(taskId);
     } catch (e) {
       _log('[Generate] submit error: $e');
+      // 检测额度不足异常（来自 API 拦截器的 QuotaExceededException）
+      final isQuotaError = e is DioException && e.error is QuotaExceededException;
       state = state.copyWith(
         stage: GenerateStage.input,
         status: GenerationStatus.error,
-        error: '任务提交失败: $e',
+        error: isQuotaError ? 'QUOTA_EXCEEDED' : '任务提交失败: $e',
       );
     }
   }

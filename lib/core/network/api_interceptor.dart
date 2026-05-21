@@ -2,6 +2,17 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 
+/// 业务层额度不足异常（code=403，但非认证问题）
+class QuotaExceededException implements Exception {
+  final String message;
+  final String? sceneId;
+
+  const QuotaExceededException(this.message, {this.sceneId});
+
+  @override
+  String toString() => message;
+}
+
 class ApiInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
@@ -29,9 +40,10 @@ class ApiInterceptor extends Interceptor {
     final code = data['code'];
     if (code == 200 || code == 0) {
       handler.next(response);
-    } else if (code == 401 || code == 403) {
+    } else if (code == 401) {
+      // 认证失败 → 触发登出
       if (kDebugMode) {
-        debugPrint('[API!] ${response.requestOptions.path} → rejected: code=$code');
+        debugPrint('[API!] ${response.requestOptions.path} → unauthorized: code=$code');
       }
       ApiClient.instance.notifyUnauthorized();
       handler.reject(
@@ -39,6 +51,19 @@ class ApiInterceptor extends Interceptor {
           requestOptions: response.requestOptions,
           response: response,
           error: data['message'] ?? '未授权',
+          type: DioExceptionType.badResponse,
+        ),
+      );
+    } else if (code == 403) {
+      // 额度不足 → 不触发登出，抛出专用异常
+      if (kDebugMode) {
+        debugPrint('[API!] ${response.requestOptions.path} → quota exceeded: code=$code');
+      }
+      handler.reject(
+        DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          error: QuotaExceededException(data['message'] ?? '额度不足'),
           type: DioExceptionType.badResponse,
         ),
       );

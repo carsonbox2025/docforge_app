@@ -12,13 +12,17 @@ class PolishRemoteDataSource {
 
   /// 提交精修任务（通过统一任务服务）
   Future<int> submitPolishTask(PolishRequest request) async {
+    final isLongDoc = request.inputMode == InputMode.upload;
     return _taskDs.submitTask(
       taskType: TaskType.polish,
+      docType: 'polish',
       userInput: {
         'text': request.text ?? '',
         'polish_level': request.level.value,
         'doc_type': request.docType,
         'file_path': request.filePath,
+        'scene_id': isLongDoc ? 'scene_polish_long' : 'scene_polish',
+        'layer': isLongDoc ? 2 : 1,
       },
       title: request.fileName ?? '精修文档',
     );
