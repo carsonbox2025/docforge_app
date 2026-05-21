@@ -128,8 +128,9 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
     state = state.copyWith(isLoading: true);
     try {
       final order = await _paymentDs.createOrder(CreateOrderRequest(
+        appKey: 'docforge',
         channel: state.channel.name,
-        orderType: 'membership',
+        productId: 'membership_monthly',
       ));
 
       // 轮询至支付完成

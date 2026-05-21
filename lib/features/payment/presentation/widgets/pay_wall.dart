@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/storage/local_cache.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/iap/iap_receipt_queue.dart';
 import '../../../membership/data/models/membership_models.dart';
 import '../../../scene/data/models/scene_models.dart';
 import '../../data/models/payment_models.dart';
@@ -49,6 +51,8 @@ class _PayWallState extends ConsumerState<PayWall>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 打开支付墙时，后台静默补单一次
+    IapReceiptQueue.instance.processPendingQueue();
   }
 
   @override
@@ -70,53 +74,106 @@ class _PayWallState extends ConsumerState<PayWall>
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 拖拽条
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
+    final isIap = ref.watch(isIapProvider);
+    final channel = ref.watch(currentChannelProvider);
+    final productsAsync = ref.watch(productsProvider(channel.name));
+
+    // 如果是IAP渠道，将选中的渠道强制设为当前的系统检测渠道
+    if (isIap && _channel != channel) {
+      setState(() {
+        _channel = channel;
+      });
+    }
+
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface.withOpacity(0.92),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 20,
+              spreadRadius: 5,
+            )
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 拖拽条
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              // 标题
-              _buildTitle(),
-              const SizedBox(height: 16),
-              // 场景 + 定价
-              _buildPriceCard(),
-              const SizedBox(height: 12),
-              // 会员升级入口
-              _buildMembershipHint(),
-              const SizedBox(height: 16),
-              // 渠道选择（idle / paying 态显示）
-              if (_step == _PayStep.idle || _step == _PayStep.paying)
-                _buildChannelSelector(),
-              if (_step == _PayStep.idle || _step == _PayStep.paying)
-                const SizedBox(height: 20),
-              // 主操作按钮
-              _buildActionButton(),
-              const SizedBox(height: 12),
-              // 提示
-              if (_step != _PayStep.done)
-                Text(
-                  _step == _PayStep.waiting || _step == _PayStep.confirming
-                      ? '支付完成后点击上方按钮确认'
-                      : '支付成功前不扣费 · 满意后再付款 · 支持开发票',
-                  style: TextStyle(fontSize: 11, color: AppColors.textMuted.withValues(alpha: 0.8)),
+                
+                // 顶部工具栏
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => _showHelpDialog(context),
+                      icon: const Icon(Icons.help_outline, size: 14, color: AppColors.textMuted),
+                      label: const Text('常见问题', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                    ),
+                    if (isIap)
+                      TextButton.icon(
+                        onPressed: () => _handleRestore(context),
+                        icon: const Icon(Icons.restore_page_outlined, size: 14, color: AppColors.primary),
+                        label: const Text(
+                          '恢复购买',
+                          style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
+                const SizedBox(height: 8),
+
+                // 标题
+                _buildTitle(),
+                const SizedBox(height: 16),
+
+                // 会员尊享金色流光特权卡片
+                _buildPremiumFeatureCard(),
+                const SizedBox(height: 16),
+
+                // 动态商品展示区 (骨架屏与卡片融合)
+                productsAsync.when(
+                  data: (products) => _buildPriceCard(products),
+                  loading: () => _buildProductSkeleton(),
+                  error: (err, _) => _buildLocalFallbackPriceCard(),
+                ),
+                const SizedBox(height: 16),
+
+                // 渠道选择（仅在线支付渠道显示）
+                if (!isIap && (_step == _PayStep.idle || _step == _PayStep.paying))
+                  _buildChannelSelector(),
+                if (!isIap && (_step == _PayStep.idle || _step == _PayStep.paying))
+                  const SizedBox(height: 20),
+
+                // 主操作按钮
+                _buildActionButton(),
+                const SizedBox(height: 12),
+
+                // 提示
+                if (_step != _PayStep.done)
+                  Text(
+                    _step == _PayStep.waiting || _step == _PayStep.confirming
+                        ? '支付完成后点击上方按钮确认'
+                        : '支付安全保障 · 满意后再付款 · 支持开具增值税发票',
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted.withOpacity(0.8)),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -137,64 +194,165 @@ class _PayWallState extends ConsumerState<PayWall>
     }
     return Text(
       _step == _PayStep.waiting || _step == _PayStep.confirming
-          ? '等待支付确认' : '额度不足',
+          ? '等待支付确认' : '额度已用尽',
       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text),
     );
   }
 
-  Widget _buildMembershipHint() {
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).pop();
-        context.push('/subscription');
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF9800), Color(0xFFF57C00)],
+  Widget _buildPremiumFeatureCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF6D365), Color(0xFFFDA085)], // 尊贵流金渐变
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFDA085).withOpacity(0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.workspace_premium_outlined, size: 24, color: Colors.white),
+              const SizedBox(width: 8),
+              const Text(
+                '升级 Pro 会员 · 全面释放生产力',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).pop();
+                  context.push('/subscription');
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        '查看 ${PlanType.monthly.price}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFE56C00)),
+                      ),
+                      const Icon(Icons.chevron_right, size: 12, color: Color(0xFFE56C00)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.workspace_premium_outlined, size: 18, color: Colors.white),
-            const SizedBox(width: 8),
-            Text(
-              '升级会员 ${PlanType.monthly.price}/月 · 全场景畅用',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
-            ),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right, size: 18, color: Colors.white70),
-          ],
-        ),
+          const SizedBox(height: 10),
+          _buildFeatureRow('✨ 高端精美文档渲染，支持专业双语翻译排版'),
+          _buildFeatureRow('🚀 专属 GPU 优先生成通道，快达 3 秒响应'),
+          _buildFeatureRow('📁 独享 10GB 云端文档存储及全格式一键导出'),
+        ],
       ),
     );
   }
 
-  Widget _buildPriceCard() {
+  Widget _buildFeatureRow(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4.0),
+      child: Row(
+        children: [
+          const Icon(Icons.check, size: 12, color: Colors.white70),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriceCard(List<Product> products) {
+    // 尝试寻找匹配当前场景的商品
+    Product? matched;
+    for (final p in products) {
+      if (p.productId == widget.scene.sceneId) {
+        matched = p;
+        break;
+      }
+    }
+
+    final displayPrice = matched?.displayPrice ?? widget.scene.pricing.displayPrice;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: AppColors.primaryBg,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        color: AppColors.primaryBg.withOpacity(0.4),
+        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.description_outlined, size: 20, color: AppColors.primary),
+          const Icon(Icons.description_outlined, size: 22, color: AppColors.primary),
           const SizedBox(width: 8),
           Text(
             widget.scene.name,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.text),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text),
           ),
           const SizedBox(width: 12),
           Text(
-            widget.scene.pricing.displayPrice,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary),
+            displayPrice,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.primary),
           ),
           const Text('/篇', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocalFallbackPriceCard() {
+    return _buildPriceCard(const []);
+  }
+
+  Widget _buildProductSkeleton() {
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: AppColors.border.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.description_outlined, size: 20, color: AppColors.textMuted),
+          const SizedBox(width: 12),
+          Container(
+            width: 80,
+            height: 16,
+            decoration: BoxDecoration(
+              color: AppColors.border.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const Spacer(),
+          Container(
+            width: 60,
+            height: 20,
+            decoration: BoxDecoration(
+              color: AppColors.border.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
         ],
       ),
     );
@@ -232,12 +390,12 @@ class _PayWallState extends ConsumerState<PayWall>
     switch (_step) {
       case _PayStep.idle:
         return _PayButton(
-          label: '确认支付 ${widget.scene.pricing.displayPrice}',
+          label: '确认支付',
           onPressed: _handlePay,
         );
       case _PayStep.paying:
         return const _PayButton(
-          label: '正在创建订单...',
+          label: '正在安全创建订单...',
           loading: true,
         );
       case _PayStep.waiting:
@@ -248,7 +406,7 @@ class _PayWallState extends ConsumerState<PayWall>
         );
       case _PayStep.confirming:
         return const _PayButton(
-          label: '正在查询支付状态...',
+          label: '正在安全验证支付状态...',
           loading: true,
         );
       case _PayStep.done:
@@ -258,37 +416,66 @@ class _PayWallState extends ConsumerState<PayWall>
 
   Future<void> _handlePay() async {
     setState(() => _step = _PayStep.paying);
+    final isIap = ref.read(isIapProvider);
+
     try {
-      final order = await ref.read(paymentProvider.notifier).createOrder(
-            channel: _channel,
-            sceneId: widget.scene.sceneId,
-            orderType: 'per_doc',
-          );
-      _orderNo = order.orderNo;
+      if (isIap) {
+        // IAP 支付链路
+        final success = await ref.read(paymentProvider.notifier).iapPurchase(
+          productId: widget.scene.sceneId,
+          channel: _channel,
+        );
+        if (success) {
+          await LocalCache.instance.delete('user_quota');
+          ref.invalidate(quotaProvider);
+          widget.onPaid();
+          if (mounted) {
+            setState(() => _step = _PayStep.done);
+            await Future.delayed(const Duration(milliseconds: 600));
+            if (mounted) Navigator.of(context).pop();
+          }
+        } else {
+          final err = ref.read(paymentProvider).error;
+          if (mounted) {
+            setState(() => _step = _PayStep.idle);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(err ?? '支付失败，请重试'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        }
+      } else {
+        // 在线支付链路
+        final order = await ref.read(paymentProvider.notifier).createOrder(
+          channel: _channel,
+          productId: widget.scene.sceneId,
+        );
+        _orderNo = order.orderNo;
 
-      if (_channel == PaymentChannel.wechat && order.payParams != null) {
-        // 微信 V3 APP 支付：通过 OpenSDK 调起
-        await _launchWechatPay(order.payParams!);
-      } else if (order.payUrl != null && order.payUrl!.isNotEmpty) {
-        // 支付宝 H5 支付：通过 URL 调起
-        final uri = Uri.parse(order.payUrl!);
-        if (!uri.scheme.startsWith('https') && !uri.scheme.startsWith('alipays')) {
-          throw ArgumentError('不安全的支付链接');
+        if (_channel == PaymentChannel.wechat && order.payParams != null) {
+          await _launchWechatPay(order.payParams!);
+        } else if (order.payUrl != null && order.payUrl!.isNotEmpty) {
+          final uri = Uri.parse(order.payUrl!);
+          if (!uri.scheme.startsWith('https') && !uri.scheme.startsWith('alipays')) {
+            throw ArgumentError('不安全的支付链接');
+          }
+          final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+          if (!launched && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('无法打开外部支付页面，请确保安装了相应支付应用'), backgroundColor: AppColors.warn),
+            );
+          }
         }
-        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-        if (!launched && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('无法打开支付页面，请检查网络'), backgroundColor: AppColors.warn),
-          );
-        }
+
+        if (mounted) setState(() => _step = _PayStep.waiting);
       }
-
-      if (mounted) setState(() => _step = _PayStep.waiting);
     } catch (e) {
       if (mounted) {
         setState(() => _step = _PayStep.idle);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('创建订单失败，请重试'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('下单失败: $e'), backgroundColor: AppColors.error),
         );
       }
     }
@@ -297,7 +484,7 @@ class _PayWallState extends ConsumerState<PayWall>
   Future<void> _launchWechatPay(Map<String, String> params) async {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('微信支付暂不可用，请选择其他支付方式'), backgroundColor: AppColors.warn),
+        const SnackBar(content: Text('微信支付暂不可用，请选择支付宝支付'), backgroundColor: AppColors.warn),
       );
       setState(() => _step = _PayStep.idle);
     }
@@ -307,9 +494,8 @@ class _PayWallState extends ConsumerState<PayWall>
     if (_orderNo == null) return;
     setState(() => _step = _PayStep.confirming);
     try {
-      final paid = await ref.read(paymentProvider.notifier).pollUntilPaid(_orderNo!, maxAttempts: 30);
+      final paid = await ref.read(paymentProvider.notifier).pollUntilPaid(_orderNo!, maxAttempts: 25);
       if (paid) {
-        // 清除配额缓存并刷新 Provider
         await LocalCache.instance.delete('user_quota');
         ref.invalidate(quotaProvider);
         widget.onPaid();
@@ -323,7 +509,7 @@ class _PayWallState extends ConsumerState<PayWall>
           setState(() => _step = _PayStep.waiting);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('暂未检测到支付成功，请稍后再试'),
+              content: Text('暂未检测到微信/支付宝确认消息，请稍后再试'),
               backgroundColor: AppColors.warn,
             ),
           );
@@ -333,10 +519,82 @@ class _PayWallState extends ConsumerState<PayWall>
       if (mounted) {
         setState(() => _step = _PayStep.waiting);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('查询支付状态失败，请重试'), backgroundColor: AppColors.error),
+          const SnackBar(content: Text('查询支付状态超时，请点击“我已完成支付”重试'), backgroundColor: AppColors.error),
         );
       }
     }
+  }
+
+  Future<void> _handleRestore(BuildContext context) async {
+    // 商店上架要求强校验的“恢复购买”
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      ),
+    );
+
+    try {
+      // 1. 处理本地未发送成功的掉单队列
+      await IapReceiptQueue.instance.processPendingQueue();
+      // 2. 从服务端检索已购买的非消耗品和有效订阅
+      await ref.read(paymentProvider.notifier).restorePurchases();
+      // 3. 刷新配额状态
+      await LocalCache.instance.delete('user_quota');
+      ref.invalidate(quotaProvider);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // 关闭 loading 框
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('购买状态恢复成功！已同步最新配额'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // 关闭 loading 框
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('恢复购买失败: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('关于付费的常见问题', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Q: 购买单篇后多久有效？', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text('A: 购买属于非消耗品模式，本篇文档在生成和后续无限次修改导出中均不会再次收费。', style: TextStyle(fontSize: 12)),
+              SizedBox(height: 10),
+              Text('Q: 充值扣款成功，但是页面没有变化？', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text('A: 可能因当前网络较慢导致服务器响应延迟，您可尝试点击右上角【恢复购买】按钮，系统将立即重新对账并恢复您的会员权益。', style: TextStyle(fontSize: 12)),
+              SizedBox(height: 10),
+              Text('Q: 支持开具发票吗？', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text('A: 支持。在“个人中心 - 我的账单 - 申请开票”中可自助申请电子增值税发票，财务将在3个工作日内开具。', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('我知道了', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -383,7 +641,7 @@ class _PayButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
+          disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
           elevation: 0,
         ),

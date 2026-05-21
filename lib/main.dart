@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/storage/local_cache.dart';
 import 'core/network/api_client.dart';
 import 'core/providers/core_providers.dart';
+import 'core/iap/channel_detector.dart';
 import 'features/auth/domain/providers/auth_provider.dart';
 import 'app/app.dart';
 
@@ -20,6 +21,12 @@ void main() {
       await LocalCache.instance.init();
     } catch (e, st) {
       debugPrint('[Main] LocalCache init failed: $e\n$st');
+    }
+
+    try {
+      await ChannelDetector.init();
+    } catch (e, st) {
+      debugPrint('[Main] ChannelDetector init failed: $e\n$st');
     }
 
     ApiClient.instance.init();

@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/iap/channel_detector.dart';
 import '../../../../core/iap/iap_service.dart';
+import '../../../../core/iap/iap_receipt_queue.dart';
 import '../../../../core/storage/local_cache.dart';
 import '../../data/payment_data_source.dart';
 import '../../data/models/payment_models.dart';
@@ -30,6 +32,11 @@ final quotaProvider = FutureProvider<QuotaInfo>((ref) async {
   } catch (_) {}
 
   return quota;
+});
+
+/// 动态商品列表 Provider，根据当前渠道自动加载
+final productsProvider = FutureProvider.family<List<Product>, String>((ref, channel) async {
+  return await PaymentDataSource().getProducts(channel);
 });
 
 /// 当前渠道 Provider
@@ -84,7 +91,7 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final order = await _ds.createOrder(CreateOrderRequest(
-        appKey: 'docforge',
+        appKey: AppConstants.appKey,
         channel: channel.name,
         productId: productId,
       ));
@@ -106,7 +113,7 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     try {
       // 1. 创建本地订单
       final order = await _ds.createOrder(CreateOrderRequest(
-        appKey: 'docforge',
+        appKey: AppConstants.appKey,
         channel: channel.name,
         productId: productId,
       ));
@@ -126,9 +133,22 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         return false;
       }
 
-      // 3. 服务端验票
-      final verified =
-          await _ds.verifyOrder(order.orderNo, result.receiptData!);
+      // 3. 🚨 写入本地防掉单挂起凭证队列
+      final queued = QueuedReceipt(
+        orderNo: order.orderNo,
+        receiptData: result.receiptData!,
+        productId: productId,
+        channel: channel.name,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+      );
+      await IapReceiptQueue.instance.enqueue(queued);
+
+      // 4. 服务端验票并发货
+      final verified = await _ds.verifyOrder(order.orderNo, result.receiptData!);
+      
+      // 5. 🚨 验票成功，从本地防掉单队列中安全擦除
+      await IapReceiptQueue.instance.dequeue(order.orderNo);
+
       state = state.copyWith(
         isLoading: false,
         currentOrder: verified,
@@ -136,7 +156,10 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
       return verified.isPaid;
     } catch (e) {
       debugPrint('[Payment] iapPurchase error: $e');
-      state = state.copyWith(isLoading: false, error: 'IAP支付失败: $e');
+      state = state.copyWith(
+        isLoading: false, 
+        error: '支付已成功，但网络较慢。请稍后点击上方【恢复购买】确认会员状态',
+      );
       return false;
     }
   }

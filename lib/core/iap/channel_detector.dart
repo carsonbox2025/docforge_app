@@ -5,10 +5,11 @@ import 'package:flutter/services.dart';
 enum IapChannel { huawei, xiaomi, oppo, vivo, honor, official }
 
 abstract class ChannelDetector {
+  static const _channel = MethodChannel('com.docforge.app/iap');
   static IapChannel? _cached;
 
-  static IapChannel detect() {
-    if (_cached != null) return _cached!;
+  static Future<void> init() async {
+    if (_cached != null) return;
 
     if (!kIsWeb && Platform.isAndroid) {
       // 1. 优先读打包时注入的渠道标记
@@ -18,12 +19,12 @@ abstract class ChannelDetector {
           (c) => c.name == buildChannel,
           orElse: () => IapChannel.official,
         );
-        return _cached!;
+        return;
       }
 
       // 2. 通过 Platform Channel 检测安装来源
       try {
-        final installer = _getInstallerPackageName();
+        final String? installer = await _channel.invokeMethod<String>('getInstallerPackageName');
         _cached = _mapInstaller(installer);
       } catch (_) {
         _cached = IapChannel.official;
@@ -31,14 +32,10 @@ abstract class ChannelDetector {
     } else {
       _cached = IapChannel.official;
     }
-
-    return _cached!;
   }
 
-  static String _getInstallerPackageName() {
-    // 由原生端通过 MethodChannel 提供
-    // 如果原生端未就绪，返回空字符串
-    return ''; // 将在 platform channel 就绪后实现
+  static IapChannel detect() {
+    return _cached ?? IapChannel.official;
   }
 
   static IapChannel _mapInstaller(String? installer) {
