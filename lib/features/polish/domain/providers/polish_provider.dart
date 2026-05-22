@@ -537,6 +537,12 @@ class PolishNotifier extends StateNotifier<PolishState> {
 
     state = state.copyWith(isProcessing: true);
     try {
+      // 先将审阅决策回写到数据库，确保文档中心下载的是最终版本
+      await _dataSource.confirmPolish(
+        documentId: documentId,
+        suggestions: state.suggestions,
+      );
+
       final response = await _dataSource.exportWord(
         documentId: documentId,
         exportMode: mode,

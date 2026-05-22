@@ -15,7 +15,7 @@ class PolishRemoteDataSource {
     final isLongDoc = request.inputMode == InputMode.upload;
     return _taskDs.submitTask(
       taskType: TaskType.polish,
-      docType: 'polish',
+      docType: request.docType,
       userInput: {
         'text': request.text ?? '',
         'polish_level': request.level.value,
@@ -83,5 +83,23 @@ class PolishRemoteDataSource {
       },
       options: Options(responseType: ResponseType.bytes),
     );
+  }
+
+  /// 确认精修结果 — 将用户审阅决策回写到数据库
+  Future<void> confirmPolish({
+    required int documentId,
+    required List<PolishSuggestion> suggestions,
+  }) async {
+    final response = await ApiClient.instance.post<Map<String, dynamic>>(
+      '${AppConstants.apiBaseUrl}/document/polish/confirm',
+      data: {
+        'document_id': documentId,
+        'suggestions': suggestions.map((s) => s.toJson()).toList(),
+      },
+    );
+    final data = response.data;
+    if (data == null || data['code'] != 200) {
+      throw Exception(data?['message'] ?? '确认失败');
+    }
   }
 }

@@ -1177,7 +1177,7 @@ class _BottomBar extends StatelessWidget {
         children: [
           Expanded(
             child: _ExportButton(
-              label: '导出文档',
+              label: '确认导出',
               icon: Icons.auto_fix_high,
               onTap: () => onExport(ExportMode.professional),
               primary: true,
