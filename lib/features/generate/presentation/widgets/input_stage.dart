@@ -93,8 +93,8 @@ class _InputStageState extends ConsumerState<InputStage> {
     GenerateState state,
     GenerateNotifier notifier,
   ) {
-    final layer1 = scenes.where((s) => s.layer == 1).toList();
-    final layer2 = scenes.where((s) => s.layer == 2).toList();
+    final layer1 = scenes.where((s) => s.layer == 1 && s.docType != 'translated').toList();
+    final layer2 = scenes.where((s) => s.layer == 2 && s.docType != 'translated').toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

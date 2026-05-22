@@ -47,6 +47,19 @@ class FeatureHeader extends StatelessWidget {
             bottom: false,
             child: Row(
               children: [
+                if (showBackButton)
+                  GestureDetector(
+                    onTap: onBack ?? () => Navigator.of(context).maybePop(),
+                    child: Container(
+                      width: 32, height: 32,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.white.withValues(alpha: 0.12),
+                      ),
+                      child: Icon(Icons.arrow_back_ios_new, size: 14, color: Colors.white.withValues(alpha: 0.8)),
+                    ),
+                  ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,18 +70,6 @@ class FeatureHeader extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (showBackButton)
-                  GestureDetector(
-                    onTap: onBack ?? () => Navigator.of(context).maybePop(),
-                    child: Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        color: Colors.white.withValues(alpha: 0.12),
-                      ),
-                      child: Icon(Icons.arrow_back_ios_new, size: 14, color: Colors.white.withValues(alpha: 0.8)),
-                    ),
-                  ),
               ],
             ),
           ),

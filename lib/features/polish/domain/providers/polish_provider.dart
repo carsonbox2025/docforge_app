@@ -496,16 +496,25 @@ class PolishNotifier extends StateNotifier<PolishState> {
   }
 
   void _parsePolishResult(Map<String, dynamic> data) {
-    if (data['source_type'] != 'polish') return;
+    // 兼容两种格式：旧格式 source_type 在顶层，新 DocDSL 格式在 metadata/polish_data 中
+    final isDocDsl = data['type'] == 'document';
+    final metadata = isDocDsl ? data['metadata'] as Map<String, dynamic>? ?? {} : <String, dynamic>{};
+    if (!isDocDsl && data['source_type'] != 'polish') return;
+    if (isDocDsl && metadata['source_type'] != 'polish') return;
 
-    final rawParagraphs = data['original_paragraphs'] as List<dynamic>? ?? [];
+    // 新格式数据在 polish_data 中，旧格式在顶层
+    final polishData = isDocDsl
+        ? data['polish_data'] as Map<String, dynamic>? ?? {}
+        : data;
+
+    final rawParagraphs = polishData['original_paragraphs'] as List<dynamic>? ?? [];
     final paragraphs = rawParagraphs
         .map((p) => SourceParagraph.fromJson(p as Map<String, dynamic>))
         .toList();
 
     // 如果 SSE 流已经推送了建议，则不重复添加
     final existingIds = state.suggestions.map((s) => s.id).toSet();
-    final rawSuggestions = data['suggestions'] as List<dynamic>? ?? [];
+    final rawSuggestions = polishData['suggestions'] as List<dynamic>? ?? [];
     final extraSuggestions = rawSuggestions
         .map((s) => PolishSuggestion.fromJson(s as Map<String, dynamic>))
         .where((s) => !existingIds.contains(s.id))
@@ -516,7 +525,7 @@ class PolishNotifier extends StateNotifier<PolishState> {
     state = state.copyWith(
       originalParagraphs: paragraphs,
       suggestions: allSuggestions,
-      sourceFileUrl: data['source_file_url'] as String?,
+      sourceFileUrl: polishData['source_file_url'] as String?,
     );
   }
 

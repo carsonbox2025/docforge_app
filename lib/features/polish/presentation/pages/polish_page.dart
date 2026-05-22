@@ -355,10 +355,12 @@ class _ReviewStageState extends ConsumerState<_ReviewStage> {
 
   void _scrollToSuggestionParagraph(int? paragraphIndex) {
     if (paragraphIndex == null || !_previewScrollController.hasClients) return;
-    // 每段约 60px 高度（含 padding），定位到对应位置
     final targetOffset = paragraphIndex * 60.0;
+    final viewport = _previewScrollController.position.viewportDimension;
+    // 将目标段落定位到视口中央
+    final centered = targetOffset - (viewport / 2) + 30;
     _previewScrollController.animateTo(
-      targetOffset.clamp(0.0, _previewScrollController.position.maxScrollExtent),
+      centered.clamp(0.0, _previewScrollController.position.maxScrollExtent),
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
     );
@@ -366,7 +368,6 @@ class _ReviewStageState extends ConsumerState<_ReviewStage> {
 
   @override
   Widget build(BuildContext context) {
-    // 精细订阅：仅布局相关的字段
     final showPreview = ref.watch(polishProvider.select((s) => s.currentSuggestionIndex >= 0));
     final stats = ref.watch(polishProvider.select((s) => (
       s.totalSuggestions, s.acceptedCount, s.rejectedCount, s.pendingCount,
@@ -391,12 +392,9 @@ class _ReviewStageState extends ConsumerState<_ReviewStage> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isWide = constraints.maxWidth >= _wideBreakpoint;
-                return AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  child: isWide
-                      ? _buildWideLayout(showPreview)
-                      : _buildNarrowLayout(showPreview),
-                );
+                return isWide
+                    ? _buildWideLayout(showPreview)
+                    : _buildNarrowLayout(showPreview);
               },
             ),
           ),
@@ -406,50 +404,46 @@ class _ReviewStageState extends ConsumerState<_ReviewStage> {
   }
 
   Widget _buildWideLayout(bool showPreview) {
-    if (showPreview) {
-      return Row(
-        key: const ValueKey('wide-split'),
-        children: [
-          Expanded(flex: 6, child: _buildPreviewWithClose()),
-          Expanded(
-            flex: 4,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                border: Border(left: BorderSide(color: AppColors.border)),
-              ),
-              child: _ReviewSuggestionPanel(scrollToParagraph: _scrollToSuggestionParagraph),
+    return Row(
+      children: [
+        // 左：文档预览（始终占位，无选中时显示提示）
+        Expanded(
+          flex: 6,
+          child: showPreview
+              ? _buildPreviewWithClose()
+              : Center(
+                  child: Text(
+                    '点击右侧建议条目预览文档',
+                    style: AppTypography.body.copyWith(color: AppColors.textMuted),
+                  ),
+                ),
+        ),
+        // 右：建议面板（始终存在，不重建）
+        Expanded(
+          flex: 4,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(left: BorderSide(color: AppColors.border)),
             ),
+            child: _ReviewSuggestionPanel(scrollToParagraph: _scrollToSuggestionParagraph),
           ),
-        ],
-      );
-    }
-
-    return SingleChildScrollView(
-      key: const ValueKey('wide-only'),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          const SizedBox(height: 8),
-          _buildHintBanner(),
-          _ReviewSuggestionPanel(scrollToParagraph: _scrollToSuggestionParagraph),
-          const SizedBox(height: 16),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildNarrowLayout(bool showPreview) {
-    if (showPreview) {
-      return Column(
-        key: const ValueKey('narrow-split'),
-        children: [
+    return Column(
+      children: [
+        // 建议面板 — 始终是同一个实例，不因预览开关重建
+        Expanded(
+          flex: showPreview ? 45 : 1,
+          child: _ReviewSuggestionPanel(scrollToParagraph: _scrollToSuggestionParagraph),
+        ),
+        if (showPreview)
           Expanded(
-            flex: 5,
-            child: _ReviewSuggestionPanel(scrollToParagraph: _scrollToSuggestionParagraph),
-          ),
-          Expanded(
-            flex: 3,
+            flex: 55,
             child: Container(
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: AppColors.border)),
@@ -457,17 +451,6 @@ class _ReviewStageState extends ConsumerState<_ReviewStage> {
               child: _buildPreviewWithClose(),
             ),
           ),
-        ],
-      );
-    }
-
-    return Column(
-      key: const ValueKey('narrow-only'),
-      children: [
-        _buildHintBanner(),
-        Expanded(
-          child: _ReviewSuggestionPanel(scrollToParagraph: _scrollToSuggestionParagraph),
-        ),
       ],
     );
   }
@@ -553,66 +536,66 @@ class _ReviewStageState extends ConsumerState<_ReviewStage> {
 }
 
 /// 独立的建议面板组件 — 精细订阅，避免整体重建
-class _ReviewSuggestionPanel extends ConsumerWidget {
+class _ReviewSuggestionPanel extends ConsumerStatefulWidget {
   final void Function(int? paragraphIndex) scrollToParagraph;
   const _ReviewSuggestionPanel({required this.scrollToParagraph});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final stats = ref.watch(polishProvider.select((s) => (
-      s.totalSuggestions, s.acceptedCount, s.rejectedCount, s.pendingCount,
-    )));
+  ConsumerState<_ReviewSuggestionPanel> createState() => _ReviewSuggestionPanelState();
+}
+
+class _ReviewSuggestionPanelState extends ConsumerState<_ReviewSuggestionPanel> {
+  final ScrollController _scrollController = ScrollController(keepScrollOffset: true);
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final filterState = ref.watch(polishProvider.select((s) => s.filterStatus));
     final filtered = ref.watch(polishProvider.select((s) => s.filteredSuggestions));
-    final actionState = ref.watch(polishProvider.select((s) => (
-      s.canUndo, s.canRedo, s.sourceFileUrl != null,
-    )));
+    final allProcessed = ref.watch(polishProvider.select((s) => s.pendingCount == 0 && s.totalSuggestions > 0));
+    final currentIdx = ref.watch(polishProvider.select((s) => s.currentSuggestionIndex));
     final notifier = ref.read(polishProvider.notifier);
 
     return Column(
       children: [
-        _StatsBar(
-          total: stats.$1,
-          accepted: stats.$2,
-          rejected: stats.$3,
-          pending: stats.$4,
-        ),
         _FilterBar(
           filterStatus: filterState,
           onStatusChanged: (s) => notifier.setFilterStatus(s),
+          onAcceptAll: () => notifier.acceptAll(),
+          onRejectAll: () => notifier.rejectAll(),
         ),
         Expanded(
           child: filtered.isEmpty
               ? const Center(child: Text('暂无匹配建议', style: AppTypography.caption))
               : ListView.separated(
+                  controller: _scrollController,
                   padding: const EdgeInsets.all(AppSpacing.md),
                   itemCount: filtered.length,
                   separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
                   itemBuilder: (_, i) {
                     final suggestion = filtered[i];
+                    final suggestionIdx = ref.read(polishProvider).suggestions.indexOf(suggestion);
                     return _SuggestionCard(
                       suggestion: suggestion,
+                      isSelected: suggestionIdx == currentIdx,
                       onAccept: () => notifier.acceptSuggestion(suggestion.id),
                       onReject: () => notifier.rejectSuggestion(suggestion.id),
                       onTap: () {
-                        final idx = ref.read(polishProvider).suggestions.indexOf(suggestion);
-                        notifier.setCurrentSuggestionIndex(idx);
-                        scrollToParagraph(suggestion.paragraphIndex);
+                        notifier.setCurrentSuggestionIndex(suggestionIdx);
+                        widget.scrollToParagraph(suggestion.paragraphIndex);
                       },
                     );
                   },
                 ),
         ),
-        _BottomActionBar(
-          canUndo: actionState.$1,
-          canRedo: actionState.$2,
-          hasSourceFile: actionState.$3,
-          onUndo: () => notifier.undo(),
-          onRedo: () => notifier.redo(),
-          onAcceptAll: () => notifier.acceptAll(),
-          onRejectAll: () => notifier.rejectAll(),
+        _BottomBar(
+          allProcessed: allProcessed,
           onExport: (mode) => _doExport(context, notifier, mode),
-          onBack: () => notifier.goBackToInput(),
         ),
       ],
     );
@@ -1057,7 +1040,7 @@ class _DocumentPreview extends StatelessWidget {
 
           Color bgColor = Colors.transparent;
           if (isCurrentFocus) {
-            bgColor = AppColors.infoBg;
+            bgColor = const Color(0x1A2563EB);
           } else if (hasPending) {
             bgColor = const Color(0x0A2563EB);
           }
@@ -1075,6 +1058,7 @@ class _DocumentPreview extends StatelessWidget {
             text,
             pendingInThisPara,
             rejectedInThisPara,
+            isCurrentFocus ? currentSuggestion : null,
           );
 
           return Container(
@@ -1099,12 +1083,12 @@ class _DocumentPreview extends StatelessWidget {
     String text,
     List<PolishSuggestion> pending,
     List<PolishSuggestion> rejected,
+    PolishSuggestion? activeSuggestion,
   ) {
     if (pending.isEmpty && rejected.isEmpty) {
       return [TextSpan(text: text)];
     }
 
-    // 标记所有需要特殊渲染的区间
     final marks = <_TextMark>[];
     for (final s in rejected) {
       final idx = text.indexOf(s.original);
@@ -1112,7 +1096,10 @@ class _DocumentPreview extends StatelessWidget {
     }
     for (final s in pending) {
       final idx = text.indexOf(s.original);
-      if (idx >= 0) marks.add(_TextMark(idx, idx + s.original.length, 'pending'));
+      if (idx >= 0) {
+        final isActive = activeSuggestion != null && s.id == activeSuggestion.id;
+        marks.add(_TextMark(idx, idx + s.original.length, isActive ? 'active' : 'pending'));
+      }
     }
     if (marks.isEmpty) return [TextSpan(text: text)];
 
@@ -1131,6 +1118,15 @@ class _DocumentPreview extends StatelessWidget {
           style: const TextStyle(
             decoration: TextDecoration.lineThrough,
             color: AppColors.textMuted,
+          ),
+        ));
+      } else if (m.type == 'active') {
+        spans.add(TextSpan(
+          text: segment,
+          style: const TextStyle(
+            backgroundColor: Color(0x55FF6B00),
+            color: Color(0xFFD45500),
+            fontWeight: FontWeight.w600,
           ),
         ));
       } else {
@@ -1158,51 +1154,45 @@ class _TextMark {
   const _TextMark(this.start, this.end, this.type);
 }
 
-class _StatsBar extends StatelessWidget {
-  final int total, accepted, rejected, pending;
-  const _StatsBar({
-    required this.total,
-    required this.accepted,
-    required this.rejected,
-    required this.pending,
+class _BottomBar extends StatelessWidget {
+  final bool allProcessed;
+  final void Function(ExportMode) onExport;
+
+  const _BottomBar({
+    required this.allProcessed,
+    required this.onExport,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (!allProcessed) return const SizedBox.shrink();
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        border: Border(top: BorderSide(color: AppColors.border)),
+        color: AppColors.surface,
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _StatChip(label: '共 $total 条', color: AppColors.primary),
-          _StatChip(label: '采纳 $accepted', color: AppColors.success),
-          _StatChip(label: '拒绝 $rejected', color: AppColors.error),
-          _StatChip(label: '待审 $pending', color: AppColors.warn),
+          Expanded(
+            child: _ExportButton(
+              label: '导出文档',
+              icon: Icons.auto_fix_high,
+              onTap: () => onExport(ExportMode.professional),
+              primary: true,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _ExportButton(
+              label: '审阅报告',
+              icon: Icons.assessment,
+              onTap: () => onExport(ExportMode.report),
+              primary: false,
+            ),
+          ),
         ],
-      ),
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _StatChip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.micro.copyWith(color: color, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1211,10 +1201,14 @@ class _StatChip extends StatelessWidget {
 class _FilterBar extends StatelessWidget {
   final String filterStatus;
   final ValueChanged<String> onStatusChanged;
+  final VoidCallback onAcceptAll;
+  final VoidCallback onRejectAll;
 
   const _FilterBar({
     required this.filterStatus,
     required this.onStatusChanged,
+    required this.onAcceptAll,
+    required this.onRejectAll,
   });
 
   @override
@@ -1243,6 +1237,10 @@ class _FilterBar extends StatelessWidget {
             selected: filterStatus == 'all',
             onTap: () => onStatusChanged('all'),
           ),
+          const Spacer(),
+          _SmallButton(label: '全部采纳', onTap: onAcceptAll, color: AppColors.success),
+          const SizedBox(width: 6),
+          _SmallButton(label: '全部拒绝', onTap: onRejectAll, color: AppColors.error),
         ],
       ),
     );
@@ -1283,12 +1281,14 @@ class _FilterChip extends StatelessWidget {
 
 class _SuggestionCard extends StatelessWidget {
   final PolishSuggestion suggestion;
+  final bool isSelected;
   final VoidCallback onAccept;
   final VoidCallback onReject;
   final VoidCallback onTap;
 
   const _SuggestionCard({
     required this.suggestion,
+    this.isSelected = false,
     required this.onAccept,
     required this.onReject,
     required this.onTap,
@@ -1305,14 +1305,22 @@ class _SuggestionCard extends StatelessWidget {
     if (isRejected) borderColor = AppColors.textMuted;
     if (suggestion.status == 'conflict') borderColor = AppColors.warn;
 
+    final bgColor = isSelected
+        ? AppColors.primary.withValues(alpha: 0.06)
+        : AppColors.surface;
+    final effectiveBorder = isSelected
+        ? Border.all(color: AppColors.primary, width: 2)
+        : Border.all(color: borderColor, width: isPending ? 1.5 : 1);
+
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: bgColor,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: borderColor, width: isPending ? 1.5 : 1),
+          border: effectiveBorder,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1446,100 +1454,6 @@ class _SeverityBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(label, style: AppTypography.micro.copyWith(color: color, fontWeight: FontWeight.w600)),
-    );
-  }
-}
-
-class _BottomActionBar extends StatelessWidget {
-  final bool canUndo;
-  final bool canRedo;
-  final bool hasSourceFile;
-  final VoidCallback onUndo;
-  final VoidCallback onRedo;
-  final VoidCallback onAcceptAll;
-  final VoidCallback onRejectAll;
-  final void Function(ExportMode) onExport;
-  final VoidCallback onBack;
-
-  const _BottomActionBar({
-    required this.canUndo,
-    required this.canRedo,
-    required this.hasSourceFile,
-    required this.onUndo,
-    required this.onRedo,
-    required this.onAcceptAll,
-    required this.onRejectAll,
-    required this.onExport,
-    required this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.border)),
-        color: AppColors.surface,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 批量操作
-          Row(
-            children: [
-              _SmallButton(label: '全部采纳', onTap: onAcceptAll, color: AppColors.success),
-              const SizedBox(width: 6),
-              _SmallButton(label: '全部拒绝', onTap: onRejectAll, color: AppColors.error),
-              const Spacer(),
-              _SmallButton(label: '撤销', onTap: canUndo ? onUndo : null, color: AppColors.textSecondary),
-              const SizedBox(width: 6),
-              _SmallButton(label: '重做', onTap: canRedo ? onRedo : null, color: AppColors.textSecondary),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          // 导出按钮
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _ExportButton(
-                label: '专业排版导出',
-                icon: Icons.auto_fix_high,
-                onTap: () => onExport(ExportMode.professional),
-                primary: true,
-              ),
-              if (hasSourceFile) ...[
-                _ExportButton(
-                  label: '原格式',
-                  icon: Icons.description,
-                  onTap: () => onExport(ExportMode.original),
-                  primary: false,
-                ),
-                _ExportButton(
-                  label: '修订模式(Beta)',
-                  icon: Icons.track_changes,
-                  onTap: () => onExport(ExportMode.trackChanges),
-                  primary: false,
-                ),
-              ],
-              _ExportButton(
-                label: '审阅报告',
-                icon: Icons.assessment,
-                onTap: () => onExport(ExportMode.report),
-                primary: false,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          // 返回
-          Center(
-            child: TextButton(
-              onPressed: onBack,
-              child: Text('返回输入', style: AppTypography.small.copyWith(color: AppColors.textMuted)),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

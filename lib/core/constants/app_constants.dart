@@ -84,7 +84,7 @@ class AppConstants {
   static String paymentOrderVerifyUrl(String orderNo) =>
       '$paymentBase/orders/$orderNo/verify';
   static String get paymentRestoreUrl => '$paymentBase/restore';
-  static String get quotasMeUrl => '$paymentBase/quotas/me';
+  static String get quotasMeUrl => '$apiBasePath/payment/quotas/me';
 
   // Quota APIs (relative paths for Dio baseUrl)
   static const String quotaUsageUrl = '/quota/usage';
