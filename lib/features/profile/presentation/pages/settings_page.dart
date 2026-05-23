@@ -47,6 +47,12 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           _buildSection([
             _SettingsTile(
+              icon: Icons.person_outline,
+              title: '编辑资料',
+              trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
+              onTap: () => context.push('/profile-setup'),
+            ),
+            _SettingsTile(
               icon: Icons.language,
               title: '语言',
               trailing: _trailingText('中文'),

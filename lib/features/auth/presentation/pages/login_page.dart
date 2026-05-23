@@ -94,6 +94,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         _showTip('请输入验证码');
         return;
       }
+      if (code.length < 6) {
+        _showTip('验证码为 6 位数字');
+        return;
+      }
       await ref.read(authProvider.notifier).loginWithSms(phone, code);
     } else {
       final identifier = _identifierController.text.trim();

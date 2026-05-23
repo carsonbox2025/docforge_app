@@ -87,6 +87,20 @@ class ApiInterceptor extends Interceptor {
     if (err.response?.statusCode == 401) {
       ApiClient.instance.notifyUnauthorized();
     }
+    // 从响应体中提取业务错误信息
+    if (err.response?.data is Map<String, dynamic>) {
+      final data = err.response!.data as Map<String, dynamic>;
+      final msg = data['message'] ?? data['msg'];
+      if (msg is String && msg.isNotEmpty) {
+        handler.next(DioException(
+          requestOptions: err.requestOptions,
+          response: err.response,
+          error: msg,
+          type: DioExceptionType.badResponse,
+        ));
+        return;
+      }
+    }
     if (kDebugMode) {
       final reqTs = err.requestOptions.extra['reqTs'] as int?;
       final elapsed = reqTs != null ? '${DateTime.now().millisecondsSinceEpoch - reqTs}ms' : '?';

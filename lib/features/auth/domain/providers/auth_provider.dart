@@ -120,7 +120,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   void completeOnboarding() {
-    state = state.copyWith(needsOnboarding: false);
+    state = state.copyWith(isNewUser: false, needsOnboarding: false);
+  }
+
+  void skipProfileSetup() {
+    state = state.copyWith(isNewUser: false, needsOnboarding: true);
   }
 
   void forceClearSession() {

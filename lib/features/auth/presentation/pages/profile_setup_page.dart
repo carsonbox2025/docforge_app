@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/providers/auth_provider.dart';
@@ -27,7 +26,29 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
     super.dispose();
   }
 
-  bool get _isValid => _usernameController.text.trim().length >= 2;
+  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  bool get _isValid {
+    final username = _usernameController.text.trim();
+    if (username.length < 2) return false;
+    final email = _emailController.text.trim();
+    if (email.isNotEmpty && !_emailRegex.hasMatch(email)) return false;
+    final pwd = _passwordController.text;
+    if (pwd.isNotEmpty && pwd.length < 6) return false;
+    return true;
+  }
+
+  String? get _emailError {
+    final email = _emailController.text.trim();
+    if (email.isNotEmpty && !_emailRegex.hasMatch(email)) return '请输入正确的邮箱格式';
+    return null;
+  }
+
+  String? get _passwordError {
+    final pwd = _passwordController.text;
+    if (pwd.isNotEmpty && pwd.length < 6) return '密码至少 6 位';
+    return null;
+  }
 
   Future<void> _submit() async {
     if (!_isValid) return;
@@ -146,10 +167,12 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: '绑定邮箱，接收订单通知',
-                prefixIcon: Icon(Icons.mail_outlined, size: 20, color: AppColors.textMuted),
+                errorText: _emailError,
+                prefixIcon: const Icon(Icons.mail_outlined, size: 20, color: AppColors.textMuted),
               ),
+              onChanged: (_) => setState(() {}),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -163,6 +186,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
               onSubmitted: (_) => _submit(),
               decoration: InputDecoration(
                 hintText: '设置密码，下次登录更方便（6位以上）',
+                errorText: _passwordError,
                 prefixIcon: const Icon(Icons.lock_outline, size: 20, color: AppColors.textMuted),
                 suffixIcon: GestureDetector(
                   onTap: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -223,7 +247,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
   Widget _buildInfoHint(String text) {
     return Row(
       children: [
-        Icon(Icons.info_outline, size: 14, color: AppColors.textMuted),
+        const Icon(Icons.info_outline, size: 14, color: AppColors.textMuted),
         const SizedBox(width: 4),
         Expanded(child: Text(text, style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),
       ],
@@ -251,7 +275,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
       height: 48,
       child: OutlinedButton(
         onPressed: () {
-          ref.read(authProvider.notifier).completeOnboarding();
+          ref.read(authProvider.notifier).skipProfileSetup();
         },
         child: const Text('跳过，直接开始'),
       ),

@@ -62,8 +62,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authProvider);
       final isSplashPage = state.matchedLocation == '/splash';
       final isAuthPage = state.matchedLocation == '/login' ||
-          state.matchedLocation == '/profile-setup' ||
           state.matchedLocation == '/onboarding';
+      final isProfileSetup = state.matchedLocation == '/profile-setup';
       final isAuthenticated = authState.isAuthenticated;
       final isRestoring = authState.isRestoring;
 
@@ -72,7 +72,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (isSplashPage) return null;
 
       if (!isAuthenticated) {
-        return isAuthPage ? null : '/login';
+        return isAuthPage || isProfileSetup ? null : '/login';
       }
 
       // 阶段1: 新用户 → 资料补全
