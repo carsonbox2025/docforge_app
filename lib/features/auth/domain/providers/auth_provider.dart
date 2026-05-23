@@ -4,6 +4,7 @@ import '../../data/auth_remote_data_source.dart';
 import '../../data/models/auth_models.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/providers/core_providers.dart';
 import '../entities/user.dart';
 import '../repositories/auth_repository.dart';
@@ -114,7 +115,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    await _secureStorage.clearAll();
+    await _secureStorage.clearSession();
     ApiClient.instance.clearToken();
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
@@ -125,6 +126,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void skipProfileSetup() {
     state = state.copyWith(isNewUser: false, needsOnboarding: true);
+  }
+
+  Future<void> deleteAccount() async {
+    try {
+      await ApiClient.instance.post(AppConstants.accountDeleteUrl);
+    } catch (_) {
+      // 即使 API 失败也清除本地会话
+    }
+    await _secureStorage.clearAll();
+    ApiClient.instance.clearToken();
+    state = const AuthState(status: AuthStatus.unauthenticated);
   }
 
   void forceClearSession() {

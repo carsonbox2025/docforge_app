@@ -21,7 +21,15 @@ class SecureStorage {
   Future<void> setUserId(String id) =>
       _storage.write(key: AppConstants.userIdKey, value: id);
 
+  Future<void> deleteUserId() => _storage.delete(key: AppConstants.userIdKey);
+
   Future<void> clearAll() => _storage.deleteAll();
+
+  /// 仅清除登录 session，保留"记住密码"凭据
+  Future<void> clearSession() async {
+    await _storage.delete(key: AppConstants.tokenKey);
+    await _storage.delete(key: AppConstants.userIdKey);
+  }
 
   // ─── 记住密码凭据 ───
 

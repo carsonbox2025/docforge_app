@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/providers/theme_provider.dart';
+import '../../../auth/domain/providers/auth_provider.dart';
 
-class SettingsPage extends StatefulWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
-  bool _darkMode = false;
+class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _pushNotification = true;
 
   @override
@@ -61,7 +63,12 @@ class _SettingsPageState extends State<SettingsPage> {
             _SettingsTile(
               icon: Icons.dark_mode_outlined,
               title: '深色模式',
-              trailing: _buildSwitch(_darkMode, (v) => setState(() => _darkMode = v)),
+              trailing: _buildSwitch(
+                ref.watch(themeModeProvider) == ThemeMode.dark,
+                (v) => ref.read(themeModeProvider.notifier).setMode(
+                  v ? ThemeMode.dark : ThemeMode.light,
+                ),
+              ),
             ),
             _SettingsTile(
               icon: Icons.notifications_outlined,
@@ -86,6 +93,50 @@ class _SettingsPageState extends State<SettingsPage> {
               onTap: () => context.push('/about'),
             ),
           ]),
+          const SizedBox(height: 32),
+          _buildSection([
+            _SettingsTile(
+              icon: Icons.delete_forever_outlined,
+              title: '注销账号',
+              titleColor: AppColors.error,
+              trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
+              onTap: () => _showDeleteAccountDialog(context),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        title: const Text('注销账号', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+        content: const Text(
+          '确定要注销账号吗？\n\n'
+          '注销后：\n'
+          '• 文档数据将被清除\n'
+          '• 会员权益将失效\n'
+          '• 30天内可恢复\n'
+          '• 超30天不可恢复\n\n'
+          '此操作不可撤销，请谨慎决定。',
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消', style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(authProvider.notifier).deleteAccount();
+            },
+            child: const Text('确认注销', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+          ),
         ],
       ),
     );
@@ -195,12 +246,14 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final Widget trailing;
   final VoidCallback? onTap;
+  final Color? titleColor;
 
   const _SettingsTile({
     required this.icon,
     required this.title,
     required this.trailing,
     this.onTap,
+    this.titleColor,
   });
 
   @override
@@ -217,10 +270,10 @@ class _SettingsTile extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.text,
+                  color: titleColor ?? AppColors.text,
                 ),
               ),
             ),

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/storage/local_cache.dart';
+import '../../data/search_data_source.dart';
 import '../../../document/data/models/document_models.dart';
-import '../../../document/data/document_data_source.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -13,27 +14,54 @@ class SearchPage extends StatefulWidget {
 }
 
 class _SearchPageState extends State<SearchPage> {
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
-  final DocumentDataSource _documentDataSource = DocumentDataSource();
+  final _searchController = TextEditingController();
+  final _focusNode = FocusNode();
+  final _dataSource = SearchDataSource();
 
   String _query = '';
-  List<String> _searchHistory = [
-    '技术开发合同',
-    '可行性研究报告',
-    '劳动合同模板',
-    '会议纪要',
-    '采购招标',
-  ];
+  List<String> _searchHistory = [];
   List<DocForgeDocument> _results = [];
   bool _isSearching = false;
+  bool _isLoadingMore = false;
+  int _page = 1;
+  int _total = 0;
+
+  static const _historyKey = 'search_history';
+  static const _maxHistoryItems = 12;
 
   @override
   void initState() {
     super.initState();
+    _loadHistory();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final saved = await LocalCache.instance.get(_historyKey);
+      if (saved != null && mounted) {
+        setState(() {
+          _searchHistory = List<String>.from(saved as List);
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveHistory() async {
+    // 去重 + 限制数量
+    final cleaned = <String>[];
+    for (final h in [_query, ..._searchHistory]) {
+      if (!cleaned.contains(h)) cleaned.add(h);
+    }
+    if (cleaned.length > _maxHistoryItems) {
+      cleaned.removeRange(_maxHistoryItems, cleaned.length);
+    }
+    _searchHistory = cleaned;
+    try {
+      await LocalCache.instance.set(_historyKey, cleaned);
+    } catch (_) {}
   }
 
   @override
@@ -44,43 +72,72 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void _onSearch(String query) {
-    if (query.trim().isEmpty) {
+    final q = query.trim();
+    if (q.isEmpty) {
       setState(() {
         _query = '';
         _results = [];
         _isSearching = false;
+        _page = 1;
+        _total = 0;
       });
       return;
     }
+    if (q == _query) return;
 
     setState(() {
-      _query = query.trim();
+      _query = q;
       _isSearching = true;
+      _page = 1;
+      _results = [];
+      _total = 0;
     });
 
-    _performSearch(query.trim());
+    _performSearch(q);
   }
 
   Future<void> _performSearch(String query) async {
-    // Mock search from history data source
-    final response = await _documentDataSource.listDocuments(pageSize: 100);
-    if (!mounted) return;
+    try {
+      final response = await _dataSource.searchDocuments(query: query, page: _page);
+      if (!mounted) return;
 
-    final items = response['items'] as List<dynamic>? ?? [];
-    final allDocs = items.map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>)).toList();
+      final items = response['items'] as List<dynamic>? ?? [];
+      final results = items.map((e) => DocForgeDocument.fromJson(e as Map<String, dynamic>)).toList();
 
-    final results = allDocs.where((doc) {
-      final q = query.toLowerCase();
-      return doc.title.toLowerCase().contains(q) ||
-          doc.docType.label.contains(q);
-    }).toList();
-
-    if (mounted) {
       setState(() {
-        _results = results;
+        if (_page == 1) {
+          _results = results;
+        } else {
+          _results.addAll(results);
+        }
+        _total = response['total'] as int? ?? 0;
         _isSearching = false;
+        _isLoadingMore = false;
       });
+
+      _saveHistory();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+          _isLoadingMore = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('搜索失败: $e'), backgroundColor: AppColors.error),
+        );
+      }
     }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore) return;
+    if (_results.length >= _total) return;
+
+    setState(() {
+      _page++;
+      _isLoadingMore = true;
+    });
+    await _performSearch(_query);
   }
 
   void _useHistoryTag(String tag) {
@@ -89,15 +146,8 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void _clearHistory() {
-    setState(() {
-      _searchHistory = [];
-    });
-  }
-
-  void _removeHistoryTag(String tag) {
-    setState(() {
-      _searchHistory = _searchHistory.where((t) => t != tag).toList();
-    });
+    setState(() => _searchHistory = []);
+    LocalCache.instance.set(_historyKey, []);
   }
 
   @override
@@ -149,7 +199,7 @@ class _SearchPageState extends State<SearchPage> {
                     controller: _searchController,
                     focusNode: _focusNode,
                     autofocus: true,
-                    onChanged: _onSearch,
+                    onSubmitted: _onSearch,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
                       hintText: '搜索文档...',
@@ -185,15 +235,9 @@ class _SearchPageState extends State<SearchPage> {
           children: [
             Icon(Icons.search, size: 48, color: AppColors.textMuted.withValues(alpha: 0.5)),
             const SizedBox(height: 12),
-            const Text(
-              '搜索文档',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-            ),
+            const Text('搜索文档', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
             const SizedBox(height: 4),
-            const Text(
-              '输入关键词搜索历史文档',
-              style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-            ),
+            const Text('输入关键词搜索历史文档', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
           ],
         ),
       );
@@ -206,28 +250,20 @@ class _SearchPageState extends State<SearchPage> {
         children: [
           Row(
             children: [
-              const Text(
-                '搜索历史',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text),
-              ),
+              const Text('搜索历史', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text)),
               const Spacer(),
               GestureDetector(
                 onTap: _clearHistory,
-                child: const Text(
-                  '清空',
-                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-                ),
+                child: const Text('清空', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 8, runSpacing: 8,
             children: _searchHistory.map((tag) {
               return GestureDetector(
                 onTap: () => _useHistoryTag(tag),
-                onLongPress: () => _removeHistoryTag(tag),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
@@ -240,10 +276,7 @@ class _SearchPageState extends State<SearchPage> {
                     children: [
                       const Icon(Icons.history, size: 12, color: AppColors.textMuted),
                       const SizedBox(width: 5),
-                      Text(
-                        tag,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
-                      ),
+                      Text(tag, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
@@ -262,110 +295,92 @@ class _SearchPageState extends State<SearchPage> {
         children: [
           Icon(Icons.search_off, size: 48, color: AppColors.textMuted.withValues(alpha: 0.5)),
           const SizedBox(height: 12),
-          Text(
-            '未找到"$_query"相关文档',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-          ),
+          Text('未找到"$_query"相关文档', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          const Text(
-            '请尝试其他关键词',
-            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-          ),
+          const Text('请尝试其他关键词', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
         ],
       ),
     );
   }
 
   Widget _buildResults() {
-    return ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 20),
-      itemCount: _results.length,
-      itemBuilder: (context, index) {
-        final doc = _results[index];
-        return GestureDetector(
-          onTap: () => context.push('/history/${doc.id}'),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 4),
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: [
-                // Doc type icon
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: doc.docType.bgColor,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollEndNotification && notification.metrics.pixels >= notification.metrics.maxScrollExtent - 100) {
+          _loadMore();
+        }
+        return false;
+      },
+      child: ListView.builder(
+        padding: const EdgeInsets.only(top: 8, bottom: 20),
+        itemCount: _results.length + (_isLoadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index >= _results.length) {
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
+            );
+          }
+          final doc = _results[index];
+          return GestureDetector(
+            onTap: () => context.push('/documents/${doc.id}'),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 4),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: doc.docType.bgColor,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: Icon(doc.docType.icon, size: 22, color: doc.docType.color),
                   ),
-                  child: Icon(doc.docType.icon, size: 22, color: doc.docType.color),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        doc.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.text,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Text(
-                            doc.docType.label,
-                            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '·',
-                            style: TextStyle(fontSize: 12, color: AppColors.textMuted.withValues(alpha: 0.5)),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              doc.createdAt ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(doc.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text)),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(doc.docType.label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                            const SizedBox(width: 8),
+                            Text('·', style: TextStyle(fontSize: 12, color: AppColors.textMuted.withValues(alpha: 0.5))),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(doc.createdAt ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: doc.status.bgColor,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    doc.status.label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: doc.status.color,
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: doc.status.bgColor,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(doc.status.label,
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: doc.status.color)),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

@@ -49,6 +49,14 @@ class AppConstants {
       '$apiOrigin/aistudio/service/app/$appKey/auth/setup-profile';
   static String get apiSetPasswordUrl =>
       '$apiOrigin/aistudio/service/app/$appKey/auth/set-password';
+  static String get apiForgotPwdSendCodeUrl =>
+      '$apiOrigin/aistudio/service/app/$appKey/auth/forgot-password/send-code';
+  static String get apiForgotPwdResetUrl =>
+      '$apiOrigin/aistudio/service/app/$appKey/auth/forgot-password/reset';
+
+  // Account APIs
+  static const String accountDeleteUrl = '/account/delete';
+  static const String accountCancelDeleteUrl = '/account/cancel-delete';
 
   // Storage keys
   static const String tokenKey = 'auth_token';

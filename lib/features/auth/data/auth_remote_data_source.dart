@@ -68,4 +68,26 @@ class AuthRemoteDataSource {
     );
     return UserDto.fromJson(response.data['data']['user'] as Map<String, dynamic>);
   }
+
+  Future<void> sendForgotPasswordCode(String phone) async {
+    final response = await _authDio.post(
+      AppConstants.apiForgotPwdSendCodeUrl,
+      data: {'phone': phone},
+    );
+    final body = response.data;
+    if (body['code'] != 200 && body['code'] != 0) {
+      throw Exception(body['message'] ?? '发送失败');
+    }
+  }
+
+  Future<void> resetPassword(String phone, String code, String newPassword) async {
+    final response = await _authDio.post(
+      AppConstants.apiForgotPwdResetUrl,
+      data: {'phone': phone, 'code': code, 'new_password': newPassword},
+    );
+    final body = response.data;
+    if (body['code'] != 200 && body['code'] != 0) {
+      throw Exception(body['message'] ?? '重置失败');
+    }
+  }
 }

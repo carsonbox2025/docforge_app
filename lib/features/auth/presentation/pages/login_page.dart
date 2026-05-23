@@ -312,6 +312,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             ],
           ),
         ),
+        // 忘记密码
+        Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            onTap: () => context.push('/forgot-password'),
+            child: const Text('忘记密码？',
+                style: TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w500)),
+          ),
+        ),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,

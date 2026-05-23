@@ -24,8 +24,8 @@ import '../features/search/presentation/pages/search_page.dart';
 import '../features/profile/presentation/pages/settings_page.dart';
 import '../features/profile/presentation/pages/usage_page.dart';
 import '../features/profile/presentation/pages/about_page.dart';
-import '../features/draft/presentation/pages/drafts_page.dart';
 import '../features/auth/presentation/pages/legal_page.dart';
+import '../features/auth/presentation/pages/forgot_password_page.dart';
 import '../features/feedback/presentation/pages/feedback_page.dart';
 import 'shell.dart';
 
@@ -62,8 +62,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authProvider);
       final isSplashPage = state.matchedLocation == '/splash';
       final isAuthPage = state.matchedLocation == '/login' ||
-          state.matchedLocation == '/onboarding';
+          state.matchedLocation == '/onboarding' ||
+          state.matchedLocation == '/forgot-password';
       final isProfileSetup = state.matchedLocation == '/profile-setup';
+      final isLegalPage = state.matchedLocation.startsWith('/legal');
       final isAuthenticated = authState.isAuthenticated;
       final isRestoring = authState.isRestoring;
 
@@ -72,7 +74,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (isSplashPage) return null;
 
       if (!isAuthenticated) {
-        return isAuthPage || isProfileSetup ? null : '/login';
+        return isAuthPage || isProfileSetup || isLegalPage ? null : '/login';
       }
 
       // 阶段1: 新用户 → 资料补全
@@ -91,6 +93,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashPage()),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
+      GoRoute(path: '/forgot-password', builder: (_, _) => const ForgotPasswordPage()),
       GoRoute(path: '/profile-setup', builder: (_, _) => const ProfileSetupPage()),
       GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingPage()),
       GoRoute(
@@ -151,7 +154,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/search', pageBuilder: (_, _) => _fastFadePage(const SearchPage(), const ValueKey('search'))),
       GoRoute(path: '/settings', pageBuilder: (_, _) => _fastFadePage(const SettingsPage(), const ValueKey('settings'))),
       GoRoute(path: '/usage', pageBuilder: (_, _) => _fastFadePage(const UsagePage(), const ValueKey('usage'))),
-      GoRoute(path: '/drafts', pageBuilder: (_, _) => _fastFadePage(const DraftsPage(), const ValueKey('drafts'))),
       GoRoute(path: '/about', pageBuilder: (_, _) => _fastFadePage(const AboutPage(), const ValueKey('about'))),
       GoRoute(path: '/feedback', pageBuilder: (_, _) => _fastFadePage(const FeedbackPage(), const ValueKey('feedback'))),
     ],

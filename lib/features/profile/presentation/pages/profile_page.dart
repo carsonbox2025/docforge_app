@@ -62,11 +62,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 onTap: () => context.push('/documents'),
               ),
               _MenuItem(
-                icon: Icons.drafts_outlined,
-                title: '草稿箱',
-                onTap: () => context.push('/drafts'),
-              ),
-              _MenuItem(
                 icon: Icons.bookmark_outline,
                 title: '收藏模板',
                 onTap: () => context.push('/templates'),

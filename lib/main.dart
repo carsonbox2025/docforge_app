@@ -7,18 +7,19 @@ import 'core/network/api_client.dart';
 import 'core/providers/core_providers.dart';
 import 'core/iap/channel_detector.dart';
 import 'core/iap/iap_receipt_queue.dart';
+import 'core/analytics/crash_reporter.dart';
+import 'core/analytics/analytics_service.dart';
 import 'features/auth/domain/providers/auth_provider.dart';
 import 'features/payment/data/payment_data_source.dart';
 import 'app/app.dart';
 
 void main() {
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-    debugPrint('=== FlutterError: ${details.exceptionAsString()} ===');
-  };
-
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+
+    await CrashReporter.init();
+    await AnalyticsService.init();
+
     try {
       await LocalCache.instance.init();
     } catch (e, st) {
@@ -46,13 +47,14 @@ void main() {
     // 启动后自动补单
     IapReceiptQueue.instance.processPendingQueue();
 
+    FlutterError.onError = (details) {
+      CrashReporter.recordFlutterError(details);
+    };
+
     runApp(const ProviderScope(child: _EagerInit(child: DocForgeApp())));
   }, (error, stack) {
     debugPrint('=== Uncaught Error: $error ===');
-    debugPrint(stack.toString());
-    FlutterError.presentError(
-      FlutterErrorDetails(exception: error, stack: stack),
-    );
+    CrashReporter.recordError(error, stack);
   });
 }
 
