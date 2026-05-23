@@ -4,7 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/presentation/pages/splash_page.dart';
 import '../features/auth/presentation/pages/login_page.dart';
-import '../features/auth/presentation/pages/register_page.dart';
+import '../features/auth/presentation/pages/profile_setup_page.dart';
+import '../features/auth/presentation/pages/onboarding_page.dart';
 import '../features/auth/domain/providers/auth_provider.dart';
 import '../features/home/presentation/pages/home_page.dart';
 import '../features/generate/presentation/pages/generate_page.dart';
@@ -61,25 +62,37 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authProvider);
       final isSplashPage = state.matchedLocation == '/splash';
       final isAuthPage = state.matchedLocation == '/login' ||
-          state.matchedLocation == '/register';
+          state.matchedLocation == '/profile-setup' ||
+          state.matchedLocation == '/onboarding';
       final isAuthenticated = authState.isAuthenticated;
-      final isRestoring = authState.isLoading;
+      final isRestoring = authState.isRestoring;
 
       if (isRestoring) return isSplashPage ? null : '/splash';
 
-      // /splash 页由 SplashPage 自行监听 auth 状态后导航
       if (isSplashPage) return null;
 
       if (!isAuthenticated) {
         return isAuthPage ? null : '/login';
-      } else {
-        return isAuthPage ? '/' : null;
       }
+
+      // 阶段1: 新用户 → 资料补全
+      if (authState.isNewUser) {
+        return state.matchedLocation == '/profile-setup' ? null : '/profile-setup';
+      }
+
+      // 阶段2: 资料补全完成 → 功能引导
+      if (authState.needsOnboarding) {
+        return state.matchedLocation == '/onboarding' ? null : '/onboarding';
+      }
+
+      // 阶段3: 正常使用
+      return isAuthPage ? '/' : null;
     },
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashPage()),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
-      GoRoute(path: '/register', builder: (_, _) => const RegisterPage()),
+      GoRoute(path: '/profile-setup', builder: (_, _) => const ProfileSetupPage()),
+      GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingPage()),
       GoRoute(
         path: '/legal/:type',
         pageBuilder: (_, state) {

@@ -9,6 +9,10 @@ class AppConstants {
   static const String appKey = 'docforge';
   static const String appVersion = '1.0.0';
 
+  /// 调试模式自动 mock 短信验证码，release 构建自动关闭
+  static bool get smsMockMode => kDebugMode;
+  static const String smsMockCode = '123456';
+
   // 联系方式
   static const String officialWebsite = 'https://docforge.app';
   static const String supportEmail = 'support@docforge.app';
@@ -35,14 +39,16 @@ class AppConstants {
   // BFF auth 路由：走 /aistudio/service/app/docforge/...
   static String get apiLoginUrl =>
       '$apiOrigin/aistudio/service/app/$appKey/auth/login';
-  static String get apiRegisterUrl =>
-      '$apiOrigin/aistudio/service/app/$appKey/auth/register';
   static String get apiGetMeUrl =>
       '$apiOrigin/aistudio/service/app/$appKey/auth/me';
   static String get apiSmsSendCodeUrl =>
       '$apiOrigin/aistudio/service/app/$appKey/sms/send-code';
   static String get apiSmsVerifyLoginUrl =>
       '$apiOrigin/aistudio/service/app/$appKey/sms/verify-login';
+  static String get apiSetupProfileUrl =>
+      '$apiOrigin/aistudio/service/app/$appKey/auth/setup-profile';
+  static String get apiSetPasswordUrl =>
+      '$apiOrigin/aistudio/service/app/$appKey/auth/set-password';
 
   // Storage keys
   static const String tokenKey = 'auth_token';

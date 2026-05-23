@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/feature_header.dart';
+import '../../../../shared/widgets/first_visit_tip.dart';
 import '../../../payment/presentation/widgets/pay_wall.dart';
 import '../../../scene/domain/providers/scene_provider.dart';
 import '../../data/models/polish_models.dart';
@@ -25,9 +26,15 @@ class PolishPage extends ConsumerWidget {
       }
     });
 
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      child: _stageWidget(state.stage),
+    return FirstVisitTip(
+      id: 'polish',
+      icon: Icons.auto_fix_high,
+      title: '上传草稿，一键精修',
+      description: '粘贴或上传已有文档，AI 润色措辞、修正语病、专业排版，直接导出 Word。',
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        child: _stageWidget(state.stage),
+      ),
     );
   }
 

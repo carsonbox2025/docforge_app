@@ -10,45 +10,49 @@ class LoginRequest {
       };
 }
 
-class RegisterRequest {
+class SetupProfileRequest {
   final String username;
-  final String email;
-  final String phone;
-  final String password;
+  final String? email;
+  final String? password;
 
-  RegisterRequest({
+  SetupProfileRequest({
     required this.username,
-    required this.email,
-    required this.phone,
-    required this.password,
+    this.email,
+    this.password,
   });
 
-  Map<String, dynamic> toJson() => {
-        'username': username,
-        'email': email,
-        'phone': phone,
-        'password': password,
-      };
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{'username': username};
+    if (email != null) map['email'] = email;
+    if (password != null) map['password'] = password;
+    return map;
+  }
+}
+
+class SetPasswordRequest {
+  final String password;
+  final String code;
+
+  SetPasswordRequest({required this.password, required this.code});
+
+  Map<String, dynamic> toJson() => {'password': password, 'code': code};
 }
 
 class AuthResponse {
   final String token;
   final UserDto user;
-  final String? currentWorkshopId;
-  final String? workshopRole;
+  final bool isNewUser;
 
   AuthResponse({
     required this.token,
     required this.user,
-    this.currentWorkshopId,
-    this.workshopRole,
+    this.isNewUser = false,
   });
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) => AuthResponse(
         token: json['access_token'] as String,
         user: UserDto.fromJson(json['user'] as Map<String, dynamic>),
-        currentWorkshopId: json['current_workshop_id'] as String?,
-        workshopRole: json['workshop_role'] as String?,
+        isNewUser: json['is_new_user'] as bool? ?? false,
       );
 }
 
@@ -56,7 +60,7 @@ class UserDto {
   final String id;
   final String? userid;
   final String username;
-  final String email;
+  final String? email;
   final String? phone;
   final String role;
 
@@ -64,7 +68,7 @@ class UserDto {
     required this.id,
     this.userid,
     required this.username,
-    required this.email,
+    this.email,
     this.phone,
     required this.role,
   });
@@ -73,7 +77,7 @@ class UserDto {
         id: json['id'] as String,
         userid: json['userid'] as String?,
         username: json['username'] as String,
-        email: json['email'] as String,
+        email: json['email'] as String?,
         phone: json['phone'] as String?,
         role: json['role'] as String,
       );

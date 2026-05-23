@@ -29,7 +29,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _restoreSession() async {
-    state = state.copyWith(status: AuthStatus.loading);
+    state = state.copyWith(status: AuthStatus.restoring);
     try {
       final token = await _secureStorage.getToken();
       if (token == null) {
@@ -37,7 +37,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return;
       }
       ApiClient.instance.setToken(token);
-      // 从服务器获取用户信息
       try {
         final userDto = await _dataSource.getMe(token);
         state = state.copyWith(
@@ -46,7 +45,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           user: _toUser(userDto),
         );
       } catch (_) {
-        // 获取用户信息失败（token可能过期），清除token
         await _secureStorage.clearAll();
         ApiClient.instance.clearToken();
         state = state.copyWith(status: AuthStatus.unauthenticated);
@@ -77,30 +75,41 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> register(
-      String username, String email, String phone, String password, String code) async {
-    state = state.copyWith(status: AuthStatus.loading);
-    try {
-      final resp = await _dataSource.register(username, email, phone, password, code);
-      await _saveSession(resp);
-    } catch (e) {
-      state = state.copyWith(
-          status: AuthStatus.error, errorMessage: e.toString());
-    }
+  Future<Map<String, dynamic>> sendSmsCode(String phone, {String type = 'login'}) async {
+    return await _dataSource.sendSmsCode(phone, type: type);
   }
 
-  Future<void> sendSmsCode(String phone, {String type = 'login'}) async {
-    await _dataSource.sendSmsCode(phone, type: type);
+  Future<void> setupProfile(String username, {String? email, String? password}) async {
+    state = state.copyWith(status: AuthStatus.loading);
+    try {
+      final token = state.token;
+      if (token == null) return;
+      final req = SetupProfileRequest(username: username, email: email, password: password);
+      final resp = await _dataSource.setupProfile(token, req);
+      await _secureStorage.setToken(resp.token);
+      ApiClient.instance.setToken(resp.token);
+      state = state.copyWith(
+        status: AuthStatus.authenticated,
+        token: resp.token,
+        user: _toUser(resp.user),
+        isNewUser: false,
+        needsOnboarding: true,
+      );
+    } catch (e) {
+      state = state.copyWith(status: AuthStatus.error, errorMessage: e.toString());
+    }
   }
 
   Future<void> _saveSession(AuthResponse resp) async {
     await _secureStorage.setToken(resp.token);
     await _secureStorage.setUserId(resp.user.id);
     ApiClient.instance.setToken(resp.token);
+    debugPrint('[Auth] _saveSession: isNewUser=${resp.isNewUser}, user=${resp.user.username}');
     state = state.copyWith(
       status: AuthStatus.authenticated,
       token: resp.token,
       user: _toUser(resp.user),
+      isNewUser: resp.isNewUser,
     );
   }
 
@@ -108,6 +117,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _secureStorage.clearAll();
     ApiClient.instance.clearToken();
     state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  void completeOnboarding() {
+    state = state.copyWith(needsOnboarding: false);
   }
 
   void forceClearSession() {

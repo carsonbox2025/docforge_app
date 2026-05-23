@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../shared/widgets/first_visit_tip.dart';
 import '../../domain/providers/generate_provider.dart';
 import '../widgets/input_stage.dart';
 import '../widgets/generating_stage.dart';
@@ -15,7 +16,13 @@ class GeneratePage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: _buildStage(stage),
+      body: FirstVisitTip(
+        id: 'generate',
+        icon: Icons.bolt,
+        title: '描述需求，生成专业文档',
+        description: '输入主题或关键词，选择场景，即可生成10万字长文档。\n生成后可在线预览、精修、翻译。',
+        child: _buildStage(stage),
+      ),
     );
   }
 

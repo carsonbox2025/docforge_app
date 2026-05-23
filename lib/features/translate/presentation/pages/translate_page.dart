@@ -6,6 +6,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../payment/presentation/widgets/pay_wall.dart';
 import '../../../scene/domain/providers/scene_provider.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../shared/widgets/first_visit_tip.dart';
 import '../../data/models/translate_models.dart';
 import '../../domain/providers/translate_provider.dart';
 import '../../../../shared/widgets/feature_header.dart';
@@ -28,11 +29,16 @@ class TranslatePage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _Header(stage: state.stage),
-            Expanded(
+      body: FirstVisitTip(
+        id: 'translate',
+        icon: Icons.translate_rounded,
+        title: '整篇文档翻译，术语不打架',
+        description: '上传文档一键翻译，自动锁定专业术语，支持中英日韩等6种语言，格式完整保留。',
+        child: SafeArea(
+          child: Column(
+            children: [
+              _Header(stage: state.stage),
+              Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 250),
                 child: switch (state.stage) {
@@ -45,6 +51,7 @@ class TranslatePage extends ConsumerWidget {
           ],
         ),
       ),
+    ),
     );
   }
 

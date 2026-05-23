@@ -23,7 +23,11 @@ class _SplashPageState extends ConsumerState<SplashPage> {
       if (_navigated) return;
       if (next.status == AuthStatus.authenticated) {
         _navigated = true;
-        context.go('/');
+        if (next.isNewUser) {
+          context.go('/profile-setup');
+        } else {
+          context.go('/');
+        }
       } else if (next.status == AuthStatus.unauthenticated) {
         _navigated = true;
         context.go('/login');
