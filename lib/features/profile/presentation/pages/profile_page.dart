@@ -397,49 +397,49 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         ),
         child: quotaState.isLoading
             ? Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted)))
-            : GestureDetector(
-                onTap: () => context.push('/usage'),
-                child: Row(
-                  children: [
-                    _buildQuotaItem('$totalRemaining', '剩余配额', AppColors.success, AppColors.successBg),
-                    _buildQuotaItem('—', '模板收藏', AppColors.primary, AppColors.primaryBg),
-                    _buildQuotaItem('—', '术语表', AppColors.cta, AppColors.ctaBg),
-                  ],
-                ),
+            : Row(
+                children: [
+                  _buildQuotaItem('$totalRemaining', '剩余配额', AppColors.success, AppColors.successBg, onTap: () => context.push('/usage')),
+                  _buildQuotaItem('—', '模板收藏', AppColors.primary, AppColors.primaryBg, onTap: () => context.push('/templates')),
+                  _buildQuotaItem('—', '术语表', AppColors.cta, AppColors.ctaBg, onTap: () => context.push('/glossary')),
+                ],
               ),
       ),
     );
   }
 
-  Widget _buildQuotaItem(String value, String label, Color color, Color bgColor) {
+  Widget _buildQuotaItem(String value, String label, Color color, Color bgColor, {VoidCallback? onTap}) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: color,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Column(
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: color,
-                fontWeight: FontWeight.w600,
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

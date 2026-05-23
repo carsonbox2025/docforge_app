@@ -41,8 +41,11 @@ class GlossaryNotifier extends StateNotifier<GlossaryState> {
     loadEntries();
   }
 
-  void setLanguagePair(String? pair) {
-    state = state.copyWith(selectedLanguagePair: pair);
+  void setLanguagePair(String? pair, {bool clearSelection = false}) {
+    state = state.copyWith(
+      selectedLanguagePair: pair,
+      clearLanguagePair: clearSelection,
+    );
   }
 
   Future<void> loadEntries() async {

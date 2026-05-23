@@ -24,7 +24,7 @@ class PolishRemoteDataSource {
         'scene_id': isLongDoc ? 'scene_polish_long' : 'scene_polish',
         'layer': isLongDoc ? 2 : 1,
       },
-      title: request.fileName ?? '精修文档',
+      title: request.fileName ?? '未命名',
     );
   }
 

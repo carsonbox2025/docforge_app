@@ -650,9 +650,9 @@ class _InputModeTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _ModeChip(label: '粘贴文本', selected: mode == InputMode.text, onTap: () => onChanged(InputMode.text)),
+        _ModeChip(label: '文本精修', selected: mode == InputMode.text, onTap: () => onChanged(InputMode.text)),
         const SizedBox(width: AppSpacing.sm),
-        _ModeChip(label: '上传文件', selected: mode == InputMode.upload, onTap: () => onChanged(InputMode.upload)),
+        _ModeChip(label: '文档精修', selected: mode == InputMode.upload, onTap: () => onChanged(InputMode.upload)),
       ],
     );
   }
@@ -813,7 +813,7 @@ class _LevelSelector extends StatelessWidget {
             onTap: () => onChanged(level),
             child: Container(
               margin: const EdgeInsets.only(right: AppSpacing.md),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
               decoration: BoxDecoration(
                 color: isSelected ? AppColors.successBg : AppColors.surface,
                 borderRadius: BorderRadius.circular(AppRadius.md),

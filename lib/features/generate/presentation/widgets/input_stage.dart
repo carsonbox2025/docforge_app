@@ -194,25 +194,6 @@ class _InputStageState extends ConsumerState<InputStage> {
                 ),
               ),
             ],
-            // 收费场景价格标签（Layer 1 和 Layer 2 均显示）
-            if (!scene.pricing.isFree) ...[
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                  color: isActive ? Colors.white.withValues(alpha: 0.25) : AppColors.ctaBg,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  scene.pricing.displayPrice,
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: isActive ? Colors.white : AppColors.cta,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -357,13 +338,7 @@ class _InputStageState extends ConsumerState<InputStage> {
     final scene = state.selectedScene;
     final canGenerate = _canGenerate(state);
 
-    // 按钮文案：Layer 2 或付费场景显示价格，免费场景不显示
-    String buttonText;
-    if (scene != null && !scene.pricing.isFree) {
-      buttonText = '一键生成 ${scene.pricing.displayPrice}';
-    } else {
-      buttonText = '一键生成';
-    }
+    const buttonText = '一键生成';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),

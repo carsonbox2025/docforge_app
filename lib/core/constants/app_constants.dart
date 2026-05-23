@@ -100,4 +100,10 @@ class AppConstants {
   // Feedback APIs
   static const String feedbackSubmitUrl = '/feedbacks';
   static const String feedbackListUrl = '/feedbacks/list';
+
+  // Glossary APIs (relative paths for Dio baseUrl)
+  static const String glossaryListUrl = '/glossary/list';
+  static const String glossaryAddUrl = '/glossary/add';
+  static String glossaryUpdateUrl(int id) => '/glossary/$id';
+  static String glossaryDeleteUrl(int id) => '/glossary/$id';
 }

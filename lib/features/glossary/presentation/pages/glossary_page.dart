@@ -102,7 +102,7 @@ class GlossaryPage extends ConsumerWidget {
             return Padding(
               padding: const EdgeInsets.only(right: 6),
               child: GestureDetector(
-                onTap: () => ref.read(glossaryProvider.notifier).setLanguagePair(pair == '全部' ? null : pair),
+                onTap: () => ref.read(glossaryProvider.notifier).setLanguagePair(pair == '全部' ? null : pair, clearSelection: pair == '全部'),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
