@@ -386,6 +386,8 @@ class _InputStageState extends ConsumerState<InputStage> {
 
     if (scene != null) {
       try {
+        // 每次提交前实时拉取最新额度，避免内存缓存导致数据库更新后仍弹付费墙
+        await ref.read(quotaProvider.notifier).refresh();
         final quotaState = ref.read(quotaProvider);
         final quota = quotaState.data;
         if (quota == null) {

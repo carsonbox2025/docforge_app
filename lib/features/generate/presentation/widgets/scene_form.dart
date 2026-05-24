@@ -195,7 +195,7 @@ class _TextAreaFieldState extends State<_TextAreaField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _FieldLabel(label: widget.field.label, required: widget.field.required),
+        _FieldLabel(label: widget.field.label, required: widget.field.required, fontSize: 15),
         const SizedBox(height: 6),
         Container(
           constraints: const BoxConstraints(minHeight: 180),
@@ -353,8 +353,9 @@ class _DateField extends StatelessWidget {
 class _FieldLabel extends StatelessWidget {
   final String label;
   final bool required;
+  final double fontSize;
 
-  const _FieldLabel({required this.label, required this.required});
+  const _FieldLabel({required this.label, required this.required, this.fontSize = 13});
 
   @override
   Widget build(BuildContext context) {
@@ -362,10 +363,10 @@ class _FieldLabel extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
+          style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600, color: AppColors.text),
         ),
         if (required)
-          const Text(' *', style: TextStyle(fontSize: 13, color: AppColors.error)),
+          Text(' *', style: TextStyle(fontSize: fontSize, color: AppColors.error)),
       ],
     );
   }
