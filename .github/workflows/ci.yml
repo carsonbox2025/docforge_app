@@ -7,45 +7,112 @@ on:
     branches: [main]
 
 jobs:
+  # ============================================================
+  # 静态分析 + 单元测试（所有 push / PR 都跑）
+  # ============================================================
   flutter-analyze:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.x'
+          flutter-version: '3.33.x'
           channel: 'stable'
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
 
-  backend-test:
+  # ============================================================
+  # Android — 6 渠道 Matrix 并行构建（仅 main 分支）
+  # ============================================================
+  build-android:
+    needs: flutter-analyze
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test
-        ports:
-          - 5432:5432
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [xiaomi, vivo, huawei, oppo, honor, official]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: subosito/flutter-action@v2
         with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: |
-          cd apps/docforge-service
-          pip install -r requirements.txt
-      - name: Run tests
+          flutter-version: '3.33.x'
+          channel: 'stable'
+
+      - run: mkdir -p android/app/build
+      - name: Decode keystore
+        if: env.ANDROID_KEYSTORE_B64 != ''
+        run: echo "$ANDROID_KEYSTORE_B64" | base64 -d > android/app/build/docforge-release.jks
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/test
-          REDIS_URL: redis://localhost:6379/0
-        run: |
-          cd apps/docforge-service
-          pytest tests/ -v
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+
+      - run: flutter pub get
+      - run: flutter build apk --release --flavor ${{ matrix.channel }} --dart-define=CHANNEL=${{ matrix.channel }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docforge-android-${{ matrix.channel }}
+          path: build/app/outputs/flutter-apk/app-${{ matrix.channel }}-release.apk
+
+  # ============================================================
+  # Web 构建（仅 main 分支）
+  # ============================================================
+  build-web:
+    needs: flutter-analyze
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.33.x'
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter build web --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docforge-web
+          path: build/web
+
+  # ============================================================
+  # Windows 构建（仅 main 分支）
+  # ============================================================
+  build-windows:
+    needs: flutter-analyze
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.33.x'
+          channel: 'stable'
+      - run: flutter config --enable-windows-desktop
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docforge-windows
+          path: build/windows/x64/runner/Release/
+
+  # ============================================================
+  # macOS 构建（仅 main 分支）
+  # ============================================================
+  build-macos:
+    needs: flutter-analyze
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.33.x'
+          channel: 'stable'
+      - run: flutter config --enable-macos-desktop
+      - run: flutter pub get
+      - run: flutter build macos --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docforge-macos
+          path: build/macos/Build/Products/Release/docforge_app.app

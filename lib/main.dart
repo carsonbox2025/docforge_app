@@ -13,28 +13,29 @@ import 'features/auth/domain/providers/auth_provider.dart';
 import 'features/payment/data/payment_data_source.dart';
 import 'app/app.dart';
 
+Future<void> _withTimeout(Future<void> Function() fn, String label, {Duration timeout = const Duration(seconds: 3)}) async {
+  try {
+    debugPrint('[Main] $label start');
+    await fn().timeout(timeout);
+    debugPrint('[Main] $label done');
+  } catch (e) {
+    debugPrint('[Main] $label failed: $e');
+  }
+}
+
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    await CrashReporter.init();
-    await AnalyticsService.init();
+    await _withTimeout(() => CrashReporter.init(), 'CrashReporter');
+    await _withTimeout(() => AnalyticsService.init(), 'Analytics');
 
-    try {
-      await LocalCache.instance.init();
-    } catch (e, st) {
-      debugPrint('[Main] LocalCache init failed: $e\n$st');
-    }
+    await _withTimeout(() => LocalCache.instance.init(), 'LocalCache');
 
-    try {
-      await ChannelDetector.init();
-    } catch (e, st) {
-      debugPrint('[Main] ChannelDetector init failed: $e\n$st');
-    }
+    await _withTimeout(() => ChannelDetector.init(), 'ChannelDetector');
 
     ApiClient.instance.init();
 
-    // 初始化 IAP 掉单补偿队列，注入验票回调
     final paymentDs = PaymentDataSource();
     IapReceiptQueue.init((orderNo, receiptData) async {
       try {
@@ -44,7 +45,6 @@ void main() {
         return false;
       }
     });
-    // 启动后自动补单
     IapReceiptQueue.instance.processPendingQueue();
 
     FlutterError.onError = (details) {

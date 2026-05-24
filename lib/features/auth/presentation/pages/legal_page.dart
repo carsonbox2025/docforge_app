@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -5,6 +6,8 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/network/api_client.dart';
+
+final _legalCache = <String, Map<String, String>>{};
 
 class LegalPage extends StatefulWidget {
   final String type;
@@ -19,6 +22,7 @@ class _LegalPageState extends State<LegalPage> {
   String _title = '';
   bool _isLoading = true;
   String? _error;
+  CancelToken? _cancelToken;
 
   @override
   void initState() {
@@ -26,29 +30,56 @@ class _LegalPageState extends State<LegalPage> {
     _loadContent();
   }
 
+  @override
+  void dispose() {
+    _cancelToken?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadContent() async {
+    final cached = _legalCache[widget.type];
+    if (cached != null) {
+      if (!mounted) return;
+      setState(() {
+        _title = cached['title'] ?? '';
+        _content = cached['content'] ?? '';
+        _isLoading = false;
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
+
+    _cancelToken = CancelToken();
     try {
-      final response =
-          await ApiClient.instance.get(AppConstants.legalUrl(widget.type));
+      final response = await ApiClient.instance.get(
+        AppConstants.legalUrl(widget.type),
+        queryParameters: {'_t': DateTime.now().millisecondsSinceEpoch.toString()},
+      );
+      if (_cancelToken?.isCancelled == true) return;
       final data = response.data['data'] as Map<String, dynamic>?;
-      if (mounted && data != null) {
+      if (!mounted) return;
+      if (data != null) {
+        _legalCache[widget.type] = {
+          'title': data['title']?.toString() ?? '',
+          'content': data['content']?.toString() ?? '',
+        };
         setState(() {
-          _title = data['title'] ?? '';
-          _content = data['content'] ?? '';
+          _title = _legalCache[widget.type]!['title']!;
+          _content = _legalCache[widget.type]!['content']!;
           _isLoading = false;
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = '加载失败，请检查网络';
-          _isLoading = false;
-        });
-      }
+      if (_cancelToken?.isCancelled == true) return;
+      if (!mounted) return;
+      setState(() {
+        _error = '加载失败，请检查网络';
+        _isLoading = false;
+      });
     }
   }
 
@@ -69,14 +100,15 @@ class _LegalPageState extends State<LegalPage> {
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : _error != null
               ? _buildError()
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: MarkdownBody(data: _content),
-                ),
+              : _content.isEmpty
+                  ? const Center(child: Text('暂无内容', style: TextStyle(color: AppColors.textMuted)))
+                  : MarkdownBody(
+                      data: _content,
+                      selectable: true,
+                    ),
     );
   }
 
@@ -87,9 +119,7 @@ class _LegalPageState extends State<LegalPage> {
         children: [
           const Icon(Icons.error_outline, size: 48, color: AppColors.textMuted),
           const SizedBox(height: 12),
-          Text(_error!,
-              style:
-                  const TextStyle(fontSize: 14, color: AppColors.textMuted)),
+          Text(_error!, style: const TextStyle(fontSize: 14, color: AppColors.textMuted)),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _loadContent,

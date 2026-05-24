@@ -98,9 +98,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingPage()),
       GoRoute(
         path: '/legal/:type',
-        pageBuilder: (_, state) {
+        builder: (_, state) {
           final type = state.pathParameters['type'] ?? 'terms';
-          return _fastFadePage(LegalPage(type: type), ValueKey('legal-$type'));
+          return LegalPage(type: type);
         },
       ),
 
