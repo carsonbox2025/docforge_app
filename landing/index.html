@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DocForge 稿搭子是 AI 驱动的智能文档创作平台，支持合同、标书、公文等多种文档类型。一句话需求，几分钟拿到专业文档。">
+  <meta name="keywords" content="AI写作,智能文档,文档生成,合同模板,AI创作,稿搭子,DocForge">
+  <meta name="author" content="DocForge">
+  <meta property="og:title" content="DocForge 稿搭子 - AI 智能文档创作平台">
+  <meta property="og:description" content="AI 驱动的智能文档创作平台，从构思到完成，只需几分钟。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://docforge.app">
+  <meta property="og:image" content="https://docforge.app/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#2563EB">
+  <title>DocForge 稿搭子 - AI 驱动的智能文档创作平台</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232563EB'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18' font-weight='bold'>D</text></svg>">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "DocForge 稿搭子",
+    "description": "AI 驱动的智能文档创作平台",
+    "operatingSystem": "iOS, Android, Windows, macOS",
+    "applicationCategory": "ProductivityApplication",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "CNY"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Skip to main content -->
+  <a href="#main-content" class="skip-link">跳到主要内容</a>
+
+  <!-- ===== NAVBAR ===== -->
+  <header class="navbar" id="navbar" role="banner">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand" aria-label="DocForge 首页">
+        <div class="brand-icon">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="8" fill="url(#brandGrad)"/>
+            <path d="M9 10h5.5c2.2 0 4 1.8 4 4s-1.8 4-4 4H12v4H9V10zm3 5.5h2.2c.8 0 1.5-.7 1.5-1.5s-.7-1.5-1.5-1.5H12v3zm6-3l3.5 9.5h-3l-.7-2h-3.5l-.7 2h-3L14 12.5h4zm-1 5h2l-1-3-1 3z" fill="white"/>
+            <defs>
+              <linearGradient id="brandGrad" x1="0" y1="0" x2="32" y2="32">
+                <stop stop-color="#2563EB"/>
+                <stop offset="1" stop-color="#3B82F6"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <span class="brand-text">DocForge <span class="brand-sub">稿搭子</span></span>
+      </a>
+
+      <nav class="nav-links" role="navigation" aria-label="主导航">
+        <a href="#features" class="nav-link">功能</a>
+        <a href="#how-it-works" class="nav-link">工作流</a>
+        <a href="#download" class="nav-link">下载</a>
+        <a href="#faq-placeholder" class="nav-link">帮助</a>
+      </nav>
+
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="切换深色模式" title="切换深色模式">
+          <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <a href="/app" class="btn btn-primary btn-sm">开始使用</a>
+      </div>
+
+      <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="打开菜单" aria-expanded="false">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+      </button>
+    </div>
+
+    <!-- Mobile nav drawer -->
+    <div class="mobile-drawer" id="mobileDrawer" aria-hidden="true">
+      <nav class="mobile-nav-links">
+        <a href="#features" class="mobile-nav-link">功能</a>
+        <a href="#how-it-works" class="mobile-nav-link">工作流</a>
+        <a href="#download" class="mobile-nav-link">下载</a>
+        <a href="#faq-placeholder" class="mobile-nav-link">帮助</a>
+        <a href="/app" class="btn btn-primary btn-block mt-4">开始使用</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <!-- ===== HERO SECTION ===== -->
+    <section class="hero" id="hero" aria-labelledby="hero-heading">
+      <div class="hero-bg-decor">
+        <div class="hero-blob hero-blob-1"></div>
+        <div class="hero-blob hero-blob-2"></div>
+        <div class="hero-grid"></div>
+      </div>
+
+      <div class="hero-content container">
+        <div class="hero-left">
+          <div class="hero-badge">
+            <span class="badge-dot"></span>
+            全新 AI 文档创作体验
+          </div>
+
+          <h1 id="hero-heading" class="hero-title">
+            <span class="title-line">让文档创作</span>
+            <span class="title-line title-highlight">变得简单</span>
+          </h1>
+
+          <p class="hero-subtitle">
+            AI 驱动的智能文档平台，从构思到完成，只需几分钟。<br>
+            支持合同、标书、公文、论文等 50+ 文档类型。
+          </p>
+
+          <div class="hero-cta">
+            <a href="/app" class="btn btn-primary btn-lg">
+              开始免费使用
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </a>
+            <a href="#features" class="btn btn-outline btn-lg">了解更多</a>
+          </div>
+
+          <div class="hero-stats-mini">
+            <div class="stat-mini">
+              <span class="stat-mini-num" data-count="50000">0</span><span>+</span>
+              <span class="stat-mini-label">活跃用户</span>
+            </div>
+            <div class="stat-mini-divider"></div>
+            <div class="stat-mini">
+              <span class="stat-mini-num" data-count="200">0</span><span>万+</span>
+              <span class="stat-mini-label">文档已生成</span>
+            </div>
+            <div class="stat-mini-divider"></div>
+            <div class="stat-mini">
+              <span class="stat-mini-num">6</span><span>种</span>
+              <span class="stat-mini-label">语言支持</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-right">
+          <div class="hero-mockup-wrapper">
+            <div class="hero-mockup">
+              <!-- Abstract app UI mockup -->
+              <div class="mockup-frame">
+                <div class="mockup-toolbar">
+                  <span class="mockup-dot red"></span>
+                  <span class="mockup-dot yellow"></span>
+                  <span class="mockup-dot green"></span>
+                </div>
+                <div class="mockup-content">
+                  <div class="mockup-sidebar">
+                    <div class="mockup-sidebar-item active"></div>
+                    <div class="mockup-sidebar-item"></div>
+                    <div class="mockup-sidebar-item"></div>
+                    <div class="mockup-sidebar-item"></div>
+                  </div>
+                  <div class="mockup-main">
+                    <div class="mockup-title-bar"></div>
+                    <div class="mockup-block mockup-block-lg"></div>
+                    <div class="mockup-block-row">
+                      <div class="mockup-block mockup-block-sm"></div>
+                      <div class="mockup-block mockup-block-sm"></div>
+                    </div>
+                    <div class="mockup-block mockup-block-md"></div>
+                    <div class="mockup-block mockup-block-md"></div>
+                    <div class="mockup-ai-badge">
+                      <div class="ai-badge-dot"></div>
+                      AI 正在生成...
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Floating elements -->
+            <div class="hero-float float-1">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#3B82F6" opacity="0.15"/><path d="M12 6v6l4 2" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+            <div class="hero-float float-2">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#10B981" opacity="0.12"/><path d="M10 16l4 4 8-8" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="hero-float float-3">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect width="20" height="20" rx="4" fill="#7C3AED" opacity="0.12"/><path d="M5 10h10M10 5v10" stroke="#7C3AED" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-scroll-indicator" aria-hidden="true">
+        <span>向下滚动</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </section>
+
+    <!-- ===== TRUST BAR ===== -->
+    <section class="trust-bar" aria-label="用户数据">
+      <div class="container">
+        <div class="trust-items">
+          <div class="trust-item">
+            <div class="trust-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <span class="trust-num">50,000+</span>
+            <span class="trust-label">活跃用户</span>
+          </div>
+          <div class="trust-item">
+            <div class="trust-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <span class="trust-num">200万+</span>
+            <span class="trust-label">文档已生成</span>
+          </div>
+          <div class="trust-item">
+            <div class="trust-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <span class="trust-num">99.7%</span>
+            <span class="trust-label">生成成功率</span>
+          </div>
+          <div class="trust-item">
+            <div class="trust-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <span class="trust-num">8分钟</span>
+            <span class="trust-label">平均生成时间</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== FEATURES SECTION ===== -->
+    <section class="features section" id="features" aria-labelledby="features-heading">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">核心功能</span>
+          <h2 id="features-heading" class="section-title">六大能力，覆盖<span class="text-gradient">全场景</span>文档需求</h2>
+          <p class="section-desc">从构思到精修，从翻译到导出，一站式完成所有文档工作</p>
+        </div>
+
+        <div class="features-grid">
+          <!-- Feature 1: AI Generation -->
+          <article class="feature-card" data-feature="generate">
+            <div class="feature-icon feature-icon-blue">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+            </div>
+            <h3 class="feature-title">智能生成</h3>
+            <p class="feature-desc">AI 驱动，一句话描述需求即可生成专业文档。支持合同、标书、论文、商业计划等 50+ 文档类型。</p>
+            <span class="feature-link">了解更多 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </article>
+
+          <!-- Feature 2: Polish -->
+          <article class="feature-card" data-feature="polish">
+            <div class="feature-icon feature-icon-green">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            </div>
+            <h3 class="feature-title">文档精修</h3>
+            <p class="feature-desc">智能润色措辞、修正语病、优化结构。AI 自动识别并修正语法错误，让文档专业度提升一个档次。</p>
+            <span class="feature-link">了解更多 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </article>
+
+          <!-- Feature 3: Translate -->
+          <article class="feature-card" data-feature="translate">
+            <div class="feature-icon feature-icon-orange">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/>
+              </svg>
+            </div>
+            <h3 class="feature-title">多语翻译</h3>
+            <p class="feature-desc">支持中英日韩法德西等 20+ 语言互译，保留原文排版风格，专业术语翻译准确率行业领先。</p>
+            <span class="feature-link">了解更多 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </article>
+
+          <!-- Feature 4: Templates -->
+          <article class="feature-card" data-feature="template">
+            <div class="feature-icon feature-icon-purple">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+              </svg>
+            </div>
+            <h3 class="feature-title">模板库</h3>
+            <p class="feature-desc">1000+ 精选专业模板，覆盖商务、法律、学术、工程等领域。一键套用，即刻生成标准化文档。</p>
+            <span class="feature-link">了解更多 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </article>
+
+          <!-- Feature 5: Scene -->
+          <article class="feature-card" data-feature="scene">
+            <div class="feature-icon feature-icon-pink">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+            </div>
+            <h3 class="feature-title">场景化创作</h3>
+            <p class="feature-desc">覆盖求职、投标、学术、政务等 20+ 场景。选择场景即可获得智能引导，让创作思路更清晰。</p>
+            <span class="feature-link">了解更多 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </article>
+
+          <!-- Feature 6: Glossary -->
+          <article class="feature-card" data-feature="glossary">
+            <div class="feature-icon feature-icon-cyan">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              </svg>
+            </div>
+            <h3 class="feature-title">术语管理</h3>
+            <p class="feature-desc">支持行业术语库管理，确保专业文档用词统一。支持自定义术语表，翻译时自动匹配专业表达。</p>
+            <span class="feature-link">了解更多 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== HOW IT WORKS ===== -->
+    <section class="how-it-works section" id="how-it-works" aria-labelledby="how-heading">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">创作流程</span>
+          <h2 id="how-heading" class="section-title">三步完成<span class="text-gradient">专业文档</span></h2>
+          <p class="section-desc">从需求到成品，AI 全程赋能，效率提升 10 倍</p>
+        </div>
+
+        <div class="steps-container">
+          <div class="steps-track">
+            <!-- Step 1 -->
+            <div class="step-card" data-step="1">
+              <div class="step-number">01</div>
+              <div class="step-icon-wrap">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </div>
+              <h3 class="step-title">描述需求</h3>
+              <p class="step-desc">选择文档场景，输入你的创作需求。一句话描述或详细说明均可，AI 会智能理解。</p>
+            </div>
+
+            <!-- Arrow 1 -->
+            <div class="step-arrow" aria-hidden="true">
+              <svg width="40" height="12" viewBox="0 0 40 12" fill="none">
+                <path d="M0 6h34" stroke="#CBD5E1" stroke-width="2" stroke-dasharray="4 4"/>
+                <path d="M28 1l6 5-6 5" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="step-card" data-step="2">
+              <div class="step-number">02</div>
+              <div class="step-icon-wrap">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+              </div>
+              <h3 class="step-title">AI 智能生成</h3>
+              <p class="step-desc">AI 在几分钟内完成初稿生成，自动匹配模板、润色措辞、修正语病，全程无需手动干预。</p>
+            </div>
+
+            <!-- Arrow 2 -->
+            <div class="step-arrow" aria-hidden="true">
+              <svg width="40" height="12" viewBox="0 0 40 12" fill="none">
+                <path d="M0 6h34" stroke="#CBD5E1" stroke-width="2" stroke-dasharray="4 4"/>
+                <path d="M28 1l6 5-6 5" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="step-card" data-step="3">
+              <div class="step-number">03</div>
+              <div class="step-icon-wrap">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              </div>
+              <h3 class="step-title">导出使用</h3>
+              <p class="step-desc">一键导出为 Word、PDF、Markdown 等格式。支持在线编辑微调，也可直接分享协作链接。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== DOWNLOAD SECTION ===== -->
+    <section class="download section" id="download" aria-labelledby="download-heading">
+      <div class="container">
+        <div class="download-grid">
+          <div class="download-left">
+            <div class="section-header section-header-left">
+              <span class="section-tag">全平台支持</span>
+              <h2 id="download-heading" class="section-title">随时随地，<span class="text-gradient">流畅创作</span></h2>
+              <p class="section-desc">覆盖 iOS、Android、Windows、macOS 全平台。数据云端同步，多端无缝切换。</p>
+            </div>
+
+            <div class="download-buttons">
+              <a href="#" class="download-btn download-btn-ios" aria-label="从 App Store 下载">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                <div class="download-btn-text">
+                  <span class="download-btn-label">从 App Store 下载</span>
+                  <span class="download-btn-os">iOS 版</span>
+                </div>
+              </a>
+
+              <a href="#" class="download-btn download-btn-android" aria-label="从 Google Play 下载">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3.6 21.6l10.7-10.7L3.6.3C2.4 1.5 2.4 3.6 2.4 6v12c0 2.4 0 4.5 1.2 3.6zm13.2-6.3l-3 3-10.5-10.8 3-3 10.5 10.8zm3.9-2.1c1.2-.6 1.2-2.1 0-2.7l-2.7-1.5-3 3 3 3 2.7-1.5zM7.5 21l3-3 10.5 10.8-3 3L7.5 21z"/></svg>
+                <div class="download-btn-text">
+                  <span class="download-btn-label">从 Google Play 下载</span>
+                  <span class="download-btn-os">Android 版</span>
+                </div>
+              </a>
+
+              <a href="#" class="download-btn download-btn-desktop" aria-label="下载 Windows 版">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.5l8-1.1v6.6H3zm0 .8h8v7.3l-8-1.1v-6.2zm9-8.2L21 3v9h-9V4.6zm0 15.4V15h9v6l-9-1.2z"/></svg>
+                <div class="download-btn-text">
+                  <span class="download-btn-label">Windows 版下载</span>
+                  <span class="download-btn-os">Windows 10/11</span>
+                </div>
+              </a>
+
+              <a href="#" class="download-btn download-btn-desktop" aria-label="下载 macOS 版">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                <div class="download-btn-text">
+                  <span class="download-btn-label">macOS 版下载</span>
+                  <span class="download-btn-os">macOS 12+</span>
+                </div>
+              </a>
+            </div>
+
+            <div class="download-web-notice">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              也可以直接使用 <a href="/app">Web 版</a>，无需下载安装
+            </div>
+          </div>
+
+          <div class="download-right">
+            <div class="devices-showcase">
+              <div class="device device-macbook">
+                <div class="device-screen">
+                  <div class="device-ui">
+                    <div class="device-ui-sidebar">
+                      <div class="dui-item active"></div>
+                      <div class="dui-item"></div>
+                      <div class="dui-item"></div>
+                    </div>
+                    <div class="device-ui-main">
+                      <div class="dui-title"></div>
+                      <div class="dui-block dui-block-1"></div>
+                      <div class="dui-block dui-block-2"></div>
+                      <div class="dui-block dui-block-3"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="device-base"></div>
+              </div>
+              <div class="device device-iphone">
+                <div class="device-screen">
+                  <div class="device-ui-mobile">
+                    <div class="dum-header"></div>
+                    <div class="dum-block"></div>
+                    <div class="dum-block dum-block-sm"></div>
+                    <div class="dum-block dum-block-sm"></div>
+                    <div class="dum-fab"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== CTA BANNER ===== -->
+    <section class="cta-banner section" aria-labelledby="cta-heading">
+      <div class="container">
+        <div class="cta-card">
+          <div class="cta-blob"></div>
+          <h2 id="cta-heading" class="cta-title">准备好提升你的<br>文档创作效率了吗？</h2>
+          <p class="cta-desc">免费开始使用，无需信用卡。升级会员解锁更多高级功能。</p>
+          <div class="cta-actions">
+            <a href="/app" class="btn btn-light btn-lg">
+              开始免费使用
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </a>
+            <a href="#" class="btn btn-outline-light btn-lg">查看价格方案</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="footer" role="contentinfo">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-col footer-col-brand">
+          <a href="/" class="footer-brand">
+            <div class="brand-icon">
+              <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+                <rect width="32" height="32" rx="8" fill="url(#brandGrad2)"/>
+                <path d="M9 10h5.5c2.2 0 4 1.8 4 4s-1.8 4-4 4H12v4H9V10zm3 5.5h2.2c.8 0 1.5-.7 1.5-1.5s-.7-1.5-1.5-1.5H12v3zm6-3l3.5 9.5h-3l-.7-2h-3.5l-.7 2h-3L14 12.5h4zm-1 5h2l-1-3-1 3z" fill="white"/>
+                <defs><linearGradient id="brandGrad2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#2563EB"/><stop offset="1" stop-color="#3B82F6"/></linearGradient></defs>
+              </svg>
+            </div>
+            <span class="footer-brand-text">DocForge <span class="brand-sub">稿搭子</span></span>
+          </a>
+          <p class="footer-desc">AI 驱动的智能文档创作平台，让文档创作变得简单。</p>
+          <div class="footer-social">
+            <a href="#" class="social-link" aria-label="微信公众号">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8.5 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm4 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM3 17.5V6.3c0-1.8 1.5-3.3 3.3-3.3h11.4c1.8 0 3.3 1.5 3.3 3.3v6c0 1.8-1.5 3.3-3.3 3.3H7.7l-3.4 3v-1.8H3zm14.7-1.5c1 0 1.8-.8 1.8-1.8V6.3c0-1-.8-1.8-1.8-1.8H6.3c-1 0-1.8.8-1.8 1.8v7.6c0 .5.2 1 .5 1.3l.3.3h12.4z"/></svg>
+            </a>
+            <a href="#" class="social-link" aria-label="微博">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.2 13.6c-.5 2.5-3.3 4.4-6.4 4.4-4 0-7.1-3.3-7.1-6.7 0-3.5 3.8-5.3 6.9-5.3 3.7 0 6.4 2 5.7 4.5-.1.5-.7.8-1.1.6-.3-.2-.4-.5-.5-.8-.4-2.2-3.2-3.1-5.3-2.7-2.7.5-4.5 3.1-4.1 5.8.4 2.5 2.8 4.3 5.3 4.1 1.9-.2 3.4-1.3 3.8-3.1.1-.5.5-.8 1-.7.5.1.9.4.8.9zm-3.3-7.1c.3 0 .5-.2.5-.5 0-2.3-7.5-2.3-7.5 0 0 .3.2.5.5.5h6.5z"/></svg>
+            </a>
+            <a href="#" class="social-link" aria-label="GitHub">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12c0 5.3 3.4 9.8 8.2 11.4.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.8 1.2 1.8 1.2 1.1 1.9 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2 1-.3 2-.4 3-.4s2 .1 3 .4c2.3-1.6 3.3-1.2 3.3-1.2.7 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6C20.6 21.8 24 17.3 24 12 24 5.4 18.6 0 12 0z"/></svg>
+            </a>
+          </div>
+        </div>
+
+        <div class="footer-col">
+          <h4 class="footer-heading">产品</h4>
+          <ul class="footer-links">
+            <li><a href="#features">功能介绍</a></li>
+            <li><a href="#">模板库</a></li>
+            <li><a href="#">价格方案</a></li>
+            <li><a href="#">更新日志</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4 class="footer-heading">支持</h4>
+          <ul class="footer-links">
+            <li><a href="#">帮助中心</a></li>
+            <li><a href="#">使用教程</a></li>
+            <li><a href="#">常见问题</a></li>
+            <li><a href="#">联系客服</a></li>
+            <li><a href="#">反馈建议</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4 class="footer-heading">法律</h4>
+          <ul class="footer-links">
+            <li><a href="#">隐私政策</a></li>
+            <li><a href="#">服务条款</a></li>
+            <li><a href="#">知识产权</a></li>
+            <li><a href="#">Cookie 政策</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>&copy; 2026 DocForge. All rights reserved.</p>
+        <p class="footer-icp">ICP 备案号：待备案 | 公安机关备案号：待备案</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/script.js"></script>
+</body>
+</html>
