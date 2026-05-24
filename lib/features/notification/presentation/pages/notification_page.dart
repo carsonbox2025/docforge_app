@@ -20,9 +20,7 @@ class NotificationPage extends ConsumerWidget {
           _buildHeader(context, ref, state),
           _buildStatusTabs(ref, state),
           Expanded(
-            child: state.filteredNotifications.isEmpty
-                ? _buildEmptyState(state.activeCategory)
-                : _buildNotificationList(context, ref, state),
+            child: _buildBody(context, ref, state),
           ),
         ],
       ),
@@ -189,6 +187,30 @@ class NotificationPage extends ConsumerWidget {
     }
   }
 
+  Widget _buildBody(BuildContext context, WidgetRef ref, NotificationState state) {
+    Future<void> onRefresh() => ref.read(notificationProvider.notifier).loadNotifications();
+    if (state.filteredNotifications.isEmpty) {
+      return RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: onRefresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.4,
+              child: _buildEmptyState(state.activeCategory),
+            ),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: onRefresh,
+      child: _buildNotificationList(context, ref, state),
+    );
+  }
+
   Widget _buildEmptyState(NotificationCategory category) {
     final msg = switch (category) {
       NotificationCategory.unread => '暂无未读消息',
@@ -231,9 +253,11 @@ class NotificationPage extends ConsumerWidget {
             ),
             ...entry.value.map((item) => _NotificationCard(
               item: item,
-              onTap: () {
-                ref.read(notificationProvider.notifier).markAsRead(item.id);
-                context.push('/notifications/${item.id}');
+              onTap: () async {
+                await ref.read(notificationProvider.notifier).markAsRead(item.id);
+                if (context.mounted) {
+                  context.push('/notifications/${item.id}');
+                }
               },
             )),
           ],
@@ -245,14 +269,14 @@ class NotificationPage extends ConsumerWidget {
 
 class _NotificationCard extends StatelessWidget {
   final NotificationItem item;
-  final VoidCallback onTap;
+  final Future<void> Function() onTap;
 
   const _NotificationCard({required this.item, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () => onTap(),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 4),
         padding: const EdgeInsets.all(AppSpacing.md),

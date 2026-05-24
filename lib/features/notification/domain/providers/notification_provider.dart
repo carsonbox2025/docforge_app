@@ -59,6 +59,7 @@ class NotificationState {
 class NotificationNotifier extends StateNotifier<NotificationState> {
   final NotificationDataSource _dataSource;
   final Ref _ref;
+  bool _syncing = false;
 
   NotificationNotifier(this._dataSource, this._ref) : super(const NotificationState()) {
     loadNotifications();
@@ -73,7 +74,7 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
           .toList();
       if (!mounted) return;
       state = state.copyWith(notifications: items, isLoading: false);
-      _syncUnreadCount();
+      _ref.invalidate(unreadCountProvider);
     } catch (_) {
       if (!mounted) return;
       state = state.copyWith(isLoading: false);
@@ -91,20 +92,54 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
         return n;
       }).toList(),
     );
-    try { await _dataSource.markAsRead(id); } catch (_) {}
+    try {
+      await _dataSource.markAsRead(id);
+    } catch (_) {
+      if (!mounted) return;
+      state = state.copyWith(
+        notifications: state.notifications.map((n) {
+          if (n.id == id) return n.copyWith(isRead: false);
+          return n;
+        }).toList(),
+      );
+    }
     _syncUnreadCount();
   }
 
   Future<void> markAllAsRead() async {
+    final unreadIds = state.notifications.where((n) => !n.isRead).map((n) => n.id).toSet();
     state = state.copyWith(
       notifications: state.notifications.map((n) => n.copyWith(isRead: true)).toList(),
     );
-    try { await _dataSource.markAllAsRead(); } catch (_) {}
+    try {
+      await _dataSource.markAllAsRead();
+    } catch (_) {
+      if (!mounted) return;
+      state = state.copyWith(
+        notifications: state.notifications.map((n) {
+          if (unreadIds.contains(n.id)) return n.copyWith(isRead: false);
+          return n;
+        }).toList(),
+      );
+    }
     _syncUnreadCount();
   }
 
-  void _syncUnreadCount() {
+  Future<void> _syncUnreadCount() async {
+    if (_syncing) return;
+    _syncing = true;
     _ref.invalidate(unreadCountProvider);
+    try {
+      final serverCount = await _dataSource.getUnreadCount();
+      if (!mounted) return;
+      if (serverCount != state.unreadCount) {
+        await loadNotifications();
+      }
+    } catch (_) {
+      // 网络异常时跳过本次比对，下次操作再重试
+    } finally {
+      _syncing = false;
+    }
   }
 }
 

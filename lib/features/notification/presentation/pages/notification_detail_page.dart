@@ -5,6 +5,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../data/models/notification_models.dart';
 import '../../data/notification_data_source.dart';
+import '../../domain/providers/notification_provider.dart';
 
 class NotificationDetailPage extends ConsumerStatefulWidget {
   final int notificationId;
@@ -35,7 +36,8 @@ class _NotificationDetailPageState
 
       if (data != null) {
         final item = NotificationItem.fromApi(data);
-        ds.markAsRead(item.id);
+        await ds.markAsRead(item.id);
+        ref.invalidate(unreadCountProvider);
         setState(() { _item = item; _isLoading = false; });
       } else {
         setState(() { _error = '通知不存在'; _isLoading = false; });
