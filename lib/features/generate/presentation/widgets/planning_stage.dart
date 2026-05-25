@@ -26,16 +26,16 @@ class PlanningStage extends StatelessWidget {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 4),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 640),
             child: Column(
               children: [
                 _BrandHeader(title: title, phaseInfo: phaseInfo),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: 6),
                 _ProgressBar(thoughts: thoughts, currentPhase: phase),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: 6),
                 Expanded(child: _ThoughtsContainer(thoughts: thoughts)),
               ],
             ),

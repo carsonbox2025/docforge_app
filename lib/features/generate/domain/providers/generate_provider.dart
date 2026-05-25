@@ -126,12 +126,13 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
         'layer=${scene.layer}, templateId=${scene.templateId}, mode=${state.mode}');
 
     final isLayer2 = scene.isLayer2;
+    final userTitle = state.fieldsData['title'] ?? '';
     _hasEnteredGenerating = false;
     state = state.copyWith(
       stage: GenerateStage.generating,
       status: isLayer2 ? GenerationStatus.planning : GenerationStatus.generating,
       progress: 0,
-      docTitle: '',
+      docTitle: userTitle.isNotEmpty ? userTitle : (state.fieldsData['project_name'] ?? ''),
       outline: [],
       dslNodes: {},
       streamingBlocks: {},
