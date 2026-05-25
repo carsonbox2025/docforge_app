@@ -46,6 +46,8 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
   StreamSubscription? _progressSub;
   int? _currentTaskId;
   bool _disposed = false;
+  bool _hasEnteredGenerating = false;
+  bool _bufferDumped = false;
 
   GenerateNotifier(this._dataSource) : super(const GenerateState());
 
@@ -72,6 +74,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
         'docType=${scene.docType}, layer=${scene.layer}, autoMode=$autoMode');
     _progressSub?.cancel();
     _currentTaskId = null;
+    _bufferDumped = false;
     state = state.copyWith(
       selectedScene: scene,
       mode: autoMode,
@@ -123,6 +126,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
         'layer=${scene.layer}, templateId=${scene.templateId}, mode=${state.mode}');
 
     final isLayer2 = scene.isLayer2;
+    _hasEnteredGenerating = false;
     state = state.copyWith(
       stage: GenerateStage.generating,
       status: isLayer2 ? GenerationStatus.planning : GenerationStatus.generating,
@@ -212,12 +216,6 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           progressMsg: update.message,
           status: nextStatus,
         );
-
-        _log('[Generate] state after update: status=${state.status}, '
-            'thoughts=${state.planningThoughts.length}, '
-            'outline=${state.outline.length}, '
-            'dslNodes sections=${state.dslNodes.keys.toList()}, '
-            'hasNodes=${state.dslNodes.values.any((l) => l.isNotEmpty)}');
       },
       onDone: () {
         if (_disposed || !mounted) return;
@@ -244,17 +242,13 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
 
     final dslUpdate = detail['dsl_update'] as Map<String, dynamic>?;
     if (dslUpdate == null) {
-      _log('[Generate] → legacy detail: keys=${detail.keys.toList()}');
-      // 兼容旧格式
       _handleLegacyProgressDetail(detail);
       return;
     }
 
-    _log('[Generate] → dsl_update: outline=${(dslUpdate['outline'] as List?)?.length ?? 0}, '
-        'nodeUpdates=${(dslUpdate['node_updates'] as List?)?.length ?? 0}');
-
     // 2. 收到第一个 dsl_update → 规划完成，进入正式生成
     if (state.status == GenerationStatus.planning) {
+      _hasEnteredGenerating = true;
       state = state.copyWith(
         status: GenerationStatus.generating,
         planningPhase: 'complete',
@@ -282,7 +276,6 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
         }
         
         if (outlineChanged) {
-          _log('[Generate] outline updated: ${newOutline.length} sections');
           state = state.copyWith(outline: newOutline);
         }
       }
@@ -290,9 +283,6 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
 
     // 更新 active section
     final activeSection = dslUpdate['active_section'] as String?;
-    if (activeSection != null) {
-      _log('[Generate] active section: $activeSection');
-    }
 
     // 更新 DSL nodes
     final nodeUpdates = dslUpdate['node_updates'] as List<dynamic>?;
@@ -309,7 +299,6 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
           nodes[section] = rawNodes
               .map((n) => DslNode.fromJson(n as Map<String, dynamic>))
               .toList();
-          _log('[Generate] DSL replace_all: section=$section, count=${nodes[section]!.length}');
         } else if (op == 'append') {
           final rawNode = u['node'] as Map<String, dynamic>?;
           if (rawNode != null) {
@@ -375,7 +364,27 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
       thoughts[thoughts.length - 1] = thoughts.last + content;
     }
 
-    _log('[Generate] planning thought: phase=$phase, len=${thoughts.join('').length}');
+    final buffer = thoughts.join('');
+    final hasTaskId = buffer.contains('"task_id"');
+    if (thoughts.length % 50 == 0 || hasTaskId) {
+      _log('[Generate] planning: phase=$phase, len=${buffer.length}, '
+          'thoughts=${thoughts.length}, hasTaskId=$hasTaskId');
+    }
+    // 一次性 buffer 预览：数据量足够但未找到 task_id 时，打印前 300 字符用于诊断
+    if (!_bufferDumped && !hasTaskId && buffer.length > 300) {
+      _bufferDumped = true;
+      _log('[Generate] ★ BUFFER DUMP (${buffer.length} chars): '
+          '${buffer.substring(0, 300)}');
+    }
+
+    if (_hasEnteredGenerating) {
+      // 已进入章节生成阶段，不再回退到 planning
+      state = state.copyWith(
+        planningThoughts: thoughts,
+        planningPhase: phase,
+      );
+      return;
+    }
 
     state = state.copyWith(
       planningThoughts: thoughts,
@@ -509,6 +518,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
 
   void backToInput() {
     _progressSub?.cancel();
+    _hasEnteredGenerating = false;
     state = state.copyWith(stage: GenerateStage.input, clearError: true);
   }
 
@@ -526,6 +536,7 @@ class GenerateNotifier extends StateNotifier<GenerateState> {
   Future<void> cancelGenerate() async {
     _progressSub?.cancel();
     _progressSub = null;
+    _hasEnteredGenerating = false;
     final taskId = _currentTaskId;
     _currentTaskId = null;
 

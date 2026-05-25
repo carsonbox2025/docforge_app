@@ -20,6 +20,9 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
   final _scrollController = ScrollController();
   bool _userScrolledUp = false;
   int _buildCount = 0;
+  bool _isOutlineCollapsed = false;
+  final Map<String, GlobalKey> _sectionKeys = {};
+  String? _activeChapterId;
 
   @override
   void initState() {
@@ -69,7 +72,9 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
     final errorMsg = ref.watch(generateProvider.select((s) => s.error));
     final hasNodes = ref.watch(generateProvider.select(
         (s) => s.dslNodes.isNotEmpty && s.dslNodes.values.any((list) => list.isNotEmpty)));
-    
+    final hasOutline = ref.watch(generateProvider.select(
+        (s) => s.outline.isNotEmpty && !(s.outline.length == 1 && s.outline.first.id == 'main')));
+
     final isGenerating = status == GenerationStatus.generating;
     final isPlanning = status == GenerationStatus.planning;
 
@@ -129,10 +134,10 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
                     return PlanningStage(
                       thoughts: thoughts,
                       phase: phase,
-                      title: sceneName,
+                      title: docTitle.isNotEmpty ? docTitle : sceneName,
                     );
                   })
-                : hasNodes
+                : hasNodes || hasOutline
                     ? _buildDslLayout(isGenerating)
                     : _buildLegacyLayout(isGenerating),
           ),
@@ -151,23 +156,26 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
       final hasOutline = outline.isNotEmpty;
       final isLayer1Style = !hasOutline ||
           (outline.length == 1 && outline.first.id == 'main');
-      
+      final showOutline = hasOutline && !isLayer1Style;
+
       return Row(
         children: [
-          if (hasOutline && !isLayer1Style) ...[
+          if (showOutline && !_isOutlineCollapsed) ...[
             SizedBox(
               width: 120,
-              child: _buildOutlinePanel(),
+              child: _buildOutlinePanel(outline),
             ),
-            Container(width: 1, color: AppColors.border),
+            _buildCollapseToggle(isCollapsed: false),
           ],
+          if (showOutline && _isOutlineCollapsed)
+            _buildCollapseToggle(isCollapsed: true),
           Expanded(
             child: SingleChildScrollView(
               controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(6, 12, 16, 0),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(10, 16, 16, 16),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(AppRadius.md),
@@ -180,6 +188,13 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
         ],
       );
     });
+  }
+
+  Widget _buildCollapseToggle({required bool isCollapsed}) {
+    return GestureDetector(
+      onTap: () => setState(() => _isOutlineCollapsed = !isCollapsed),
+      child: _HoverToggle(isCollapsed: isCollapsed),
+    );
   }
 
   Widget _buildDslContent(List<DslOutline> outline, bool isLayer1Style, bool isGenerating) {
@@ -215,21 +230,30 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
       // Layer 2（有大纲）：按章节渲染
       final List<Widget> widgets = [];
       int mainChapterIdx = 0;
+      int renderedIdx = 0;
 
       for (int oi = 0; oi < outline.length; oi++) {
         final item = outline[oi];
         final chId = item.id;
 
-        // 章节标题
+        // 章节编号始终递增（保持连续编号）
         final parsed = parseChapterId(chId);
         final isSub = parsed?.sub != null;
         if (!isSub) mainChapterIdx++;
+
+        // 只渲染已开始或已完成的章节，pending 章节不显示
+        if (item.status == 'pending') continue;
+
         final chNum = isSub ? '${parsed!.top}.${parsed.sub}' : toChineseNum(mainChapterIdx);
         final cleanTitle = stripTitleNumber(item.title);
         final titleWidgetText = isSub ? '$chNum $cleanTitle' : '$chNum、$cleanTitle';
 
+        _sectionKeys.putIfAbsent(chId, () => GlobalKey());
+        final sectionKey = _sectionKeys[chId]!;
+
         widgets.add(Padding(
-          padding: EdgeInsets.only(top: oi == 0 ? 0 : 16),
+          padding: EdgeInsets.only(top: renderedIdx == 0 ? 0 : 16),
+          key: sectionKey,
           child: ChapterSectionView(
             chId: chId,
             titleWidgetText: titleWidgetText,
@@ -239,68 +263,108 @@ class _GeneratingStageState extends ConsumerState<GeneratingStage> {
             status: item.status,
           ),
         ));
+        renderedIdx++;
+      }
+
+      // 最后一个正在生成的章节后显示等待提示
+      final lastActive = outline.lastWhere(
+        (o) => o.status != 'pending',
+        orElse: () => DslOutline(id: '', title: '', status: 'pending'),
+      );
+      if (lastActive.status == 'generating' && outline.any((o) => o.status == 'pending')) {
+        widgets.add(const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )),
+        ));
       }
 
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: widgets);
     });
   }
 
-  Widget _buildOutlinePanel() {
-    return Consumer(builder: (context, ref, _) {
-      final outline = ref.watch(generateProvider.select((s) => s.outline));
-      return Container(
-        color: AppColors.surface,
-        child: ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: outline.length,
-          itemBuilder: (_, i) {
-            final item = outline[i];
-            final isActive = item.status == 'generating';
-            final isDone = item.status == 'completed';
+  Widget _buildOutlinePanel(List<DslOutline> outline) {
+    return Container(
+      color: AppColors.surface,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: outline.length,
+        itemBuilder: (_, i) {
+          final item = outline[i];
+          final isActive = item.status == 'generating';
+          final isDone = item.status == 'completed';
+          final isSelected = _activeChapterId == item.id;
 
-            final parsed = parseChapterId(item.id);
-            final chapterNum = parsed != null ? toChineseNum(parsed.top) : '${i + 1}';
+          final isPending = item.status == 'pending';
 
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: isDone
-                        ? const Icon(Icons.check_circle, size: 14, color: AppColors.success)
-                        : isActive
-                            ? const _MiniPulseDot()
-                            : Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: AppColors.border),
+          final parsed = parseChapterId(item.id);
+          final chapterNum = parsed != null ? toChineseNum(parsed.top) : '${i + 1}';
+
+          return GestureDetector(
+            onTap: isPending ? null : () => _scrollToChapter(item.id),
+            child: MouseRegion(
+              cursor: isPending ? SystemMouseCursors.basic : SystemMouseCursors.click,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: isDone
+                          ? const Icon(Icons.check_circle, size: 14, color: AppColors.success)
+                          : isActive
+                              ? const _MiniPulseDot()
+                              : Container(
+                                  width: 10,
+                                  height: 10,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.border),
+                                  ),
                                 ),
-                              ),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      '$chapterNum、${stripTitleNumber(item.title)}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                        color: isActive ? AppColors.primary : isDone ? AppColors.text : AppColors.textMuted,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        '$chapterNum、${stripTitleNumber(item.title)}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: isActive || isSelected ? FontWeight.w600 : FontWeight.w400,
+                          color: isActive ? AppColors.primary : isDone ? AppColors.text : AppColors.textMuted,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _scrollToChapter(String chId) {
+    setState(() => _activeChapterId = chId);
+    final key = _sectionKeys[chId];
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(
+        key!.currentContext!,
+        alignment: 0.0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
       );
-    });
+    }
   }
 
   // ─── 旧版纯文本布局（兼容无 DSL 数据时）───
@@ -604,15 +668,69 @@ class ChapterSectionView extends ConsumerWidget {
   }
 
   Widget _buildContent(List<DslNode> sectionNodes) {
+    final cleanedNodes = _filterTrailingDeclaration(sectionNodes);
     try {
       return DslRenderer(
-        nodes: sectionNodes,
+        nodes: cleanedNodes,
         isStreaming: isLastSection && isGenerating,
       );
     } catch (e) {
       debugPrint('[ChapterSectionView] DslRenderer ERROR in section $chId: $e');
-      return _buildTextFallback(sectionNodes);
+      return _buildTextFallback(cleanedNodes);
     }
+  }
+
+  static final _trailingSummaryPattern = RegExp(
+    r'[（(]\s*本?章节?正文?结束[，,]?\s*无?小结[与和]?展望?\s*[）)]\s*$'
+    r'|[（(].*?(?:无小结|正文结束|无结语|无展望|本章.*?结束).*?[）)]\s*$',
+  );
+
+  List<DslNode> _filterTrailingDeclaration(List<DslNode> nodes) {
+    if (nodes.isEmpty || isGenerating) return nodes;
+    final last = nodes.last;
+    final text = last.text ?? '';
+    if (_trailingSummaryPattern.hasMatch(text.trim())) {
+      final cleaned = text.replaceAll(_trailingSummaryPattern, '').trim();
+      if (cleaned.isEmpty) {
+        return nodes.sublist(0, nodes.length - 1);
+      }
+      return [...nodes.sublist(0, nodes.length - 1), last.copyWith(text: cleaned)];
+    }
+    return nodes;
+  }
+}
+
+class _HoverToggle extends StatefulWidget {
+  final bool isCollapsed;
+  const _HoverToggle({required this.isCollapsed});
+
+  @override
+  State<_HoverToggle> createState() => _HoverToggleState();
+}
+
+class _HoverToggleState extends State<_HoverToggle> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: Container(
+        width: 12,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _hovering ? AppColors.borderLight : Colors.transparent,
+          border: Border(right: widget.isCollapsed ? BorderSide.none : BorderSide(color: AppColors.borderLight, width: 0.5)),
+        ),
+        child: Icon(
+          widget.isCollapsed ? Icons.chevron_right : Icons.chevron_left,
+          size: 12,
+          color: _hovering ? AppColors.text : AppColors.textMuted,
+        ),
+      ),
+    );
   }
 }
 
