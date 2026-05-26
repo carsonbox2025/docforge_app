@@ -7,16 +7,16 @@ class AppConstants {
   static const String appName = '稿搭子';
   static const String appSlogan = '智能文档工坊';
   static const String appKey = 'docforge';
-  static const String appVersion = '1.0.0';
+  static const String appVersion = '1.0.1';
 
   /// 调试模式自动 mock 短信验证码，release 构建自动关闭
   static bool get smsMockMode => kDebugMode;
   static const String smsMockCode = '123456';
 
   // 联系方式
-  static const String officialWebsite = 'https://docforge.app';
-  static const String supportEmail = 'support@docforge.app';
-  static const String wechatAccount = 'DocForge_AI';
+  static const String officialWebsite = 'http://61.132.52.22:8084/aistudio/service/docforge/web';
+  static const String supportEmail = 'docforge@126.com';
+  static const String wechatAccount = 'DocForge';
 
   // 通过 --dart-define=API_HOST=xxx 覆盖，否则按平台自动推断
   static const String _envHost = String.fromEnvironment('API_HOST');

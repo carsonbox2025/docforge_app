@@ -186,8 +186,8 @@ dart run flutter_launcher_icons
 
 | 渠道 | 信息 |
 |------|------|
-| 官网 | [https://docforge.app](https://docforge.app) |
-| 邮箱 | support@docforge.app |
+| 官网 | [http://61.132.52.22:8084/aistudio/service/docforge/web/](http://61.132.52.22:8084/aistudio/service/docforge/web/) |
+| 邮箱 | docforge@126.com (BVpQFuTbCXKDvmxA)|
 | 微信 | DocForge_AI |
 
 ---

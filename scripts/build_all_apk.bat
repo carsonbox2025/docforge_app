@@ -10,9 +10,7 @@ set SUCCESS=
 set FAILED=
 set HAS_FAIL=0
 
-:: 构建输出目录
 set APK_OUT=build\app\outputs\flutter-apk
-:: 下载页资源目录（相对于 AIStudio service）
 set DL_DIR=..\..\AIStudio\apps\service\data\docforge\downloads
 
 for %%F in (%FLAVORS%) do (
@@ -35,7 +33,6 @@ echo Failed: %FAILED%
 
 if %HAS_FAIL% equ 1 exit /b 1
 
-:: 复制 APK 到下载目录
 echo.
 echo === Copying APKs to download dir ===
 if not exist "%DL_DIR%" mkdir "%DL_DIR%"
