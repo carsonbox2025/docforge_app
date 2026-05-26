@@ -231,6 +231,10 @@ class _ReviewingStageState extends ConsumerState<_ReviewingStage> {
                     progress: state.progress,
                     message: state.progressMsg,
                   ),
+                  if (state.detectedDocType != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    _DetectedDocTypeChip(docType: state.detectedDocType!),
+                  ],
                   const SizedBox(height: AppSpacing.xl),
 
                   // AI 审阅过程
@@ -1564,6 +1568,51 @@ class _ErrorMessage extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(message, style: AppTypography.caption.copyWith(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetectedDocTypeChip extends StatelessWidget {
+  final String docType;
+  const _DetectedDocTypeChip({required this.docType});
+
+  static const _labelMap = {
+    'contract': '合同',
+    'official': '公文',
+    'paper': '论文',
+    'bid': '标书',
+    'resume': '简历',
+    'report': '报告',
+    'minutes': '会议纪要',
+    'tech_proposal': '技术方案',
+    'litigation': '诉讼文书',
+    'generic': '通用',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _labelMap[docType] ?? '通用';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.ctaBg,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.article_outlined, size: 14, color: AppColors.cta),
+          const SizedBox(width: 4),
+          Text(
+            '检测为：$label',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.cta,
+            ),
           ),
         ],
       ),

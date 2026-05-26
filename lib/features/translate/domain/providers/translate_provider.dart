@@ -479,16 +479,33 @@ class TranslateNotifier extends StateNotifier<TranslateState> {
     }
     state = state.copyWith(isLoading: true);
     try {
-      final bytes = await _dataSource.exportDocument(taskId);
+      final docType = state.detectedDocType ?? state.docType;
+      final fileName = _buildExportFileName(docType);
+      final bytes = await _dataSource.exportDocument(
+        taskId,
+        docType: docType,
+        fileName: fileName,
+      );
       await FileExporter.saveAndShare(
         bytes: Uint8List.fromList(bytes),
-        fileName: 'translated.docx',
+        fileName: fileName,
       );
       state = state.copyWith(isLoading: false);
     } catch (e) {
       debugPrint('[Translate] Export error: $e');
       state = state.copyWith(isLoading: false, errorMessage: '导出失败');
     }
+  }
+
+  static const _docTypeLabels = {
+    'contract': '合同', 'official': '公文', 'paper': '论文',
+    'bid': '标书', 'resume': '简历', 'report': '报告',
+    'minutes': '纪要', 'tech_proposal': '方案', 'generic': '文档',
+  };
+
+  String _buildExportFileName(String? docType) {
+    final label = _docTypeLabels[docType] ?? '文档';
+    return '翻译$label.docx';
   }
 
   Future<void> cancel() async {

@@ -90,10 +90,17 @@ class TranslateDataSource {
     throw Exception('文件上传失败');
   }
 
-  Future<List<int>> exportDocument(int documentId) async {
+  Future<List<int>> exportDocument(
+    int documentId, {
+    String? docType,
+    String? fileName,
+  }) async {
+    final data = <String, dynamic>{'document_id': documentId};
+    if (docType != null) data['doc_type'] = docType;
+    if (fileName != null) data['file_name'] = fileName;
     final response = await ApiClient.instance.post<List<int>>(
       '/export/word',
-      data: {'document_id': documentId},
+      data: data,
       options: Options(responseType: ResponseType.bytes),
     );
     return response.data!;

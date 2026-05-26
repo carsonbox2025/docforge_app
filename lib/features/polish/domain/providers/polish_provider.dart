@@ -49,6 +49,9 @@ class PolishState {
   final List<PolishUndoAction> undoStack;
   final int undoStackPointer;
 
+  // 自动检测到的文档类型
+  final String? detectedDocType;
+
   // 统计
   final int totalSuggestions;
   final int acceptedCount;
@@ -81,6 +84,7 @@ class PolishState {
     this.sourceFileUrl,
     this.undoStack = const [],
     this.undoStackPointer = 0,
+    this.detectedDocType,
     this.totalSuggestions = 0,
     this.acceptedCount = 0,
     this.rejectedCount = 0,
@@ -113,12 +117,14 @@ class PolishState {
     String? sourceFileUrl,
     List<PolishUndoAction>? undoStack,
     int? undoStackPointer,
+    String? detectedDocType,
     bool clearError = false,
     bool clearFileName = false,
     bool clearFilePath = false,
     bool clearTextContent = false,
     bool clearFilterCategory = false,
     bool clearFilterSeverity = false,
+    bool clearDetectedDocType = false,
   }) {
     final newSuggestions = suggestions ?? this.suggestions;
     return PolishState(
@@ -147,6 +153,7 @@ class PolishState {
       sourceFileUrl: sourceFileUrl ?? this.sourceFileUrl,
       undoStack: undoStack ?? this.undoStack,
       undoStackPointer: undoStackPointer ?? this.undoStackPointer,
+      detectedDocType: clearDetectedDocType ? null : (detectedDocType ?? this.detectedDocType),
       totalSuggestions: newSuggestions.length,
       acceptedCount: newSuggestions.where((s) => s.status == 'accepted').length,
       rejectedCount: newSuggestions.where((s) => s.status == 'rejected').length,
@@ -402,6 +409,14 @@ class PolishNotifier extends StateNotifier<PolishState> {
   }
 
   void _handleDetail(Map<String, dynamic> detail) {
+    // 文档类型自动检测结果
+    final docAnalyzed = detail['doc_analyzed'] as Map<String, dynamic>?;
+    if (docAnalyzed != null) {
+      state = state.copyWith(
+        detectedDocType: docAnalyzed['doc_type'] as String?,
+      );
+    }
+
     // 原始段落（首次推送，仅当前端尚未持有时填充）
     final rawParagraphs = detail['original_paragraphs'] as List<dynamic>?;
     if (rawParagraphs != null && state.originalParagraphs.isEmpty) {
@@ -589,6 +604,7 @@ class PolishNotifier extends StateNotifier<PolishState> {
       undoStackPointer: 0,
       progress: 0,
       clearError: true,
+      clearDetectedDocType: true,
     );
   }
 }
