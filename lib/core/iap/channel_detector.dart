@@ -23,12 +23,15 @@ abstract class ChannelDetector {
             (c) => c.name == buildChannel,
             orElse: () => IapChannel.official,
           );
+          debugPrint('[ChannelDetector] compile-time CHANNEL=$buildChannel → $_cached');
         } else {
           try {
             final String? installer = await _channel.invokeMethod<String>('getInstallerPackageName');
             _cached = _mapInstaller(installer);
-          } catch (_) {
+            debugPrint('[ChannelDetector] runtime installer=$installer → $_cached');
+          } catch (e) {
             _cached = IapChannel.official;
+            debugPrint('[ChannelDetector] runtime detection failed: $e → official');
           }
         }
       } else {

@@ -97,6 +97,10 @@ class AppConstants {
       '$paymentBase/orders/$orderNo';
   static String paymentOrderVerifyUrl(String orderNo) =>
       '$paymentBase/orders/$orderNo/verify';
+  static String paymentOrderConfirmUrl(String orderNo) =>
+      '$paymentBase/orders/$orderNo/confirm';
+  static String paymentOrderCancelUrl(String orderNo) =>
+      '$paymentBase/orders/$orderNo/cancel';
   static String get paymentRestoreUrl => '$paymentBase/restore';
   static String get quotasMeUrl => '$apiBasePath/payment/quotas/me';
 

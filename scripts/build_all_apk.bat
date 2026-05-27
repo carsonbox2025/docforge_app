@@ -15,7 +15,7 @@ set DL_DIR=..\..\AIStudio\apps\service\data\docforge\downloads
 
 for %%F in (%FLAVORS%) do (
     echo ^>^>^> Building %%F ...
-    call flutter build apk --release --flavor %%F
+    call flutter build apk --release --flavor %%F --dart-define=CHANNEL=%%F
     if !errorlevel! equ 0 (
         set SUCCESS=!SUCCESS! %%F
         echo ^>^>^> %%F OK

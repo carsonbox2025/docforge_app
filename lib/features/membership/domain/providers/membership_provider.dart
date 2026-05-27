@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/iap/channel_detector.dart';
+import '../../../../core/iap/iap_receipt_queue.dart';
+import '../../../../core/iap/iap_service.dart';
 import '../../data/models/membership_models.dart';
 import '../../../payment/data/payment_data_source.dart';
 import '../../../payment/data/models/payment_models.dart';
@@ -90,6 +93,17 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
   Future<void> ensureInitialized() async {
     if (_initialized) return;
     _initialized = true;
+
+    // IAP 渠道自动检测并设置
+    final iapChannel = ChannelDetector.detect();
+    if (iapChannel != IapChannel.official) {
+      final mapped = PaymentChannel.values.firstWhere(
+        (c) => c.name == iapChannel.name,
+        orElse: () => PaymentChannel.alipay,
+      );
+      state = state.copyWith(channel: mapped);
+    }
+
     await Future.wait([
       _loadSceneStats(),
       loadQuota(),
@@ -150,12 +164,36 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
     }
   }
 
-  /// IAP 支付流程
+  /// IAP 支付流程 — 从后台获取实际商品 ID（可能与 PlanType.productId 不同）
   Future<PaymentLaunchResult?> _subscribeIap() async {
     final notifier = _ref.read(paymentProvider.notifier);
+    final channel = state.channel;
+
+    // 从后台获取 IAP 渠道的实际商品列表
+    String iapProductId = state.selectedPlan.productId;
+    try {
+      final products = await PaymentDataSource().getProducts(channel.name);
+      if (products.isNotEmpty) {
+        // 优先匹配 PlanType.productId，否则用第一个可用商品
+        final matched = products.where((p) => p.productId == state.selectedPlan.productId);
+        iapProductId = matched.isNotEmpty ? matched.first.productId : products.first.productId;
+        debugPrint('[Membership] IAP 商品: planProductId=${state.selectedPlan.productId}, iapProductId=$iapProductId');
+      } else {
+        debugPrint('[Membership] IAP 商品列表为空, 使用默认 productId=$iapProductId');
+      }
+    } catch (e) {
+      debugPrint('[Membership] 获取 IAP 商品失败: $e, 使用默认 productId=$iapProductId');
+    }
+
     final success = await notifier.iapPurchase(
-      productId: state.selectedPlan.productId,
-      channel: state.channel,
+      productId: iapProductId,
+      channel: channel,
+      onVerifying: () {
+        state = state.copyWith(
+          isLoading: false,
+          successMessage: '支付成功，正在安全确认...',
+        );
+      },
     );
     if (!mounted) return null;
 
@@ -167,11 +205,19 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
         successMessage: '订阅成功！已激活${state.selectedPlan.label}',
       );
     } else {
-      final error = _ref.read(paymentProvider).error;
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: error ?? '支付未完成',
-      );
+      final error = _ref.read(paymentProvider).error ?? '';
+      // 检测"已购买"类错误，引导用户恢复购买
+      if (error.contains('已购买') || error.contains('ALREADY_OWNED') || error.contains('恢复购买')) {
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: '您已购买过此商品，请点击"恢复购买"完成激活',
+        );
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: error.isNotEmpty ? error : '支付未完成',
+        );
+      }
     }
     return null;
   }
@@ -217,22 +263,67 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
     if (mounted) state = state.copyWith(isLoading: false, errorMessage: '支付确认超时，请稍后查看会员状态');
   }
 
-  /// 恢复购买
+  /// 恢复购买：先查后端数据库，查不到再从 HMS 服务器拉已购记录
   Future<void> restorePurchases() async {
     state = state.copyWith(isLoading: true, clearError: true, clearSuccess: true);
     try {
+      int restored = 0;
+      int verifying = 0;
+
+      // 1. 先处理本地防掉单队列
+      await IapReceiptQueue.instance.processPendingQueue();
+
+      // 2. 查后端数据库已有订单
       final notifier = _ref.read(paymentProvider.notifier);
-      final orders = await notifier.restorePurchases();
+      final serverOrders = await notifier.restorePurchases();
+      restored += serverOrders.where((o) => o.isPaid).length;
+      verifying += serverOrders.where((o) => o.isVerifying).length;
+
+      // 3. 数据库没找到 → 从 HMS 服务器拉已购记录
+      if (restored == 0 && verifying == 0 && state.isIap) {
+        final iap = IapService();
+        final purchases = await iap.restorePurchases(productType: 'subscription');
+        debugPrint('[Membership] HMS 已购记录: ${purchases.length} 条');
+
+        for (final purchase in purchases) {
+          final purchaseToken = purchase['purchaseToken'] as String? ?? '';
+          final productId = purchase['productId'] as String? ?? '';
+          if (purchaseToken.isEmpty) continue;
+
+          try {
+            debugPrint('[Membership] HMS 恢复验票: productId=$productId');
+            final ds = PaymentDataSource();
+            final order = await ds.createOrder(CreateOrderRequest(
+              appKey: AppConstants.appKey,
+              channel: state.channel.name,
+              productId: productId,
+            ));
+            await ds.confirmOrder(order.orderNo, purchaseToken);
+            final verified = await ds.verifyOrder(order.orderNo, purchaseToken);
+            if (verified.isPaid) {
+              restored++;
+            } else if (verified.isVerifying) {
+              verifying++;
+            }
+          } catch (e) {
+            debugPrint('[Membership] HMS 恢复验票失败: $e');
+          }
+        }
+      }
+
       await loadQuota();
       _invalidateGlobalQuota();
-
-      final restored = orders.where((o) => o.isPaid).length;
       if (!mounted) return;
 
       if (restored > 0) {
         state = state.copyWith(
           isLoading: false,
           successMessage: '已恢复 $restored 笔购买记录',
+        );
+      } else if (verifying > 0) {
+        state = state.copyWith(
+          isLoading: false,
+          successMessage: '发现 $verifying 笔待确认订单，系统正在自动处理中',
         );
       } else {
         state = state.copyWith(

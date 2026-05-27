@@ -14,7 +14,7 @@ failed=()
 
 for flavor in "${FLAVORS[@]}"; do
   echo ">>> Building $flavor ..."
-  if flutter build apk --release --flavor "$flavor"; then
+  if flutter build apk --release --flavor "$flavor" --dart-define=CHANNEL="$flavor"; then
     success+=("$flavor")
     echo ">>> $flavor OK"
   else

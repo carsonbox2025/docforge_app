@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'channel_detector.dart';
 
@@ -19,12 +20,16 @@ class ProductInfo {
 class PurchaseResult {
   final bool success;
   final String? receiptData;
+  final String? purchaseData;
+  final String? signature;
   final String? orderNo;
   final String? error;
 
   const PurchaseResult({
     this.success = false,
     this.receiptData,
+    this.purchaseData,
+    this.signature,
     this.orderNo,
     this.error,
   });
@@ -53,13 +58,22 @@ class IapService {
   IapChannel get channel => _channelType;
 
   /// 查询商品信息
-  Future<List<ProductInfo>> queryProducts(List<String> productIds) async {
-    if (_channelType == IapChannel.official) return [];
+  Future<List<ProductInfo>> queryProducts(
+    List<String> productIds, {
+    String productType = 'consumable',
+  }) async {
+    if (_channelType == IapChannel.official) {
+      debugPrint('[IAP] 跳过查询: 当前为 official 渠道');
+      return [];
+    }
+    debugPrint('[IAP] 查询商品: ids=$productIds, type=$productType, channel=${_channelType.name}');
     try {
       final List result = await _channel.invokeMethod('queryProducts', {
         'channel': _channelType.name,
         'productIds': productIds,
+        'productType': productType,
       });
+      debugPrint('[IAP] 查询商品成功: ${result.length} 个');
       return result
           .cast<Map>()
           .map((m) => ProductInfo(
@@ -69,7 +83,11 @@ class IapService {
                 currency: m['currency'] as String? ?? 'CNY',
               ))
           .toList();
-    } on PlatformException {
+    } on PlatformException catch (e) {
+      debugPrint('[IAP] 查询商品 PlatformException: code=${e.code}, msg=${e.message}');
+      return [];
+    } on MissingPluginException catch (e) {
+      debugPrint('[IAP] 查询商品 MissingPluginException: $e');
       return [];
     }
   }
@@ -78,28 +96,43 @@ class IapService {
   Future<PurchaseResult> launchPayFlow({
     required String productId,
     required String orderNo,
+    String productType = 'consumable',
   }) async {
     if (_channelType == IapChannel.official) {
+      debugPrint('[IAP] 跳过支付: 当前为 official 渠道');
       return const PurchaseResult(error: '官方渠道不支持 IAP');
     }
+    debugPrint('[IAP] 发起支付: productId=$productId, orderNo=$orderNo, type=$productType, channel=${_channelType.name}');
     try {
       final Map? result = await _channel.invokeMethod('launchPayFlow', {
         'channel': _channelType.name,
         'productId': productId,
         'orderNo': orderNo,
+        'productType': productType,
       });
       if (result == null) {
-        return const PurchaseResult(error: '支付结果为空');
+        debugPrint('[IAP] 支付返回 null');
+        return const PurchaseResult(error: '支付结果为空（SDK 未返回数据）');
       }
       final success = result['success'] as bool? ?? false;
+      debugPrint('[IAP] 支付结果: success=$success, hasReceipt=${result['receiptData'] != null}, error=${result['error']}');
       return PurchaseResult(
         success: success,
         receiptData: result['receiptData'] as String?,
+        purchaseData: result['purchaseData'] as String?,
+        signature: result['signature'] as String?,
         orderNo: orderNo,
         error: success ? null : (result['error'] as String? ?? '支付失败'),
       );
     } on PlatformException catch (e) {
-      return PurchaseResult(error: e.message ?? '支付异常');
+      debugPrint('[IAP] 支付 PlatformException: code=${e.code}, msg=${e.message}, details=${e.details}');
+      if (e.code == 'ALREADY_OWNED') {
+        return PurchaseResult(error: '您已购买此商品，请点击"恢复购买"完成激活');
+      }
+      return PurchaseResult(error: '支付异常(${e.code}): ${e.message ?? "未知错误"}');
+    } on MissingPluginException catch (e) {
+      debugPrint('[IAP] 支付 MissingPluginException: $e');
+      return PurchaseResult(error: 'HMS SDK 未初始化或方法未注册，请确认设备支持华为支付');
     }
   }
 
@@ -113,6 +146,33 @@ class IapService {
       return result as bool? ?? false;
     } on PlatformException {
       return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// 从 HMS 服务器查询已购记录（用于恢复购买）
+  Future<List<Map<String, dynamic>>> restorePurchases({
+    String productType = 'subscription',
+  }) async {
+    if (_channelType == IapChannel.official) return [];
+    debugPrint('[IAP] 恢复购买: 从 HMS 服务器查询已购记录, type=$productType');
+    try {
+      final List result = await _channel.invokeMethod('restorePurchases', {
+        'channel': _channelType.name,
+        'productType': productType,
+      });
+      debugPrint('[IAP] HMS 已购记录: ${result.length} 条');
+      return result
+          .cast<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+    } on PlatformException catch (e) {
+      debugPrint('[IAP] 恢复购买 PlatformException: code=${e.code}, msg=${e.message}');
+      return [];
+    } on MissingPluginException catch (e) {
+      debugPrint('[IAP] 恢复购买 MissingPluginException: $e');
+      return [];
     }
   }
 }

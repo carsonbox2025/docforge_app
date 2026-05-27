@@ -40,7 +40,7 @@ class PayWall extends ConsumerStatefulWidget {
   ConsumerState<PayWall> createState() => _PayWallState();
 }
 
-enum _PayStep { idle, paying, waiting, confirming, done }
+enum _PayStep { idle, paying, verifying, waiting, confirming, done }
 
 class _PayWallState extends ConsumerState<PayWall>
     with WidgetsBindingObserver {
@@ -193,6 +193,17 @@ class _PayWallState extends ConsumerState<PayWall>
         ],
       );
     }
+    if (_step == _PayStep.verifying) {
+      return const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+          SizedBox(width: 8),
+          Text('支付成功，正在安全确认...',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.primary)),
+        ],
+      );
+    }
     return Text(
       _step == _PayStep.waiting || _step == _PayStep.confirming
           ? '等待支付确认' : '额度已用尽',
@@ -290,6 +301,12 @@ class _PayWallState extends ConsumerState<PayWall>
         matched = p;
         break;
       }
+    }
+
+    // IAP 渠道：如果没有精确匹配，使用第一个可用商品（如月度会员）
+    final isIap = ref.watch(isIapProvider);
+    if (matched == null && isIap && products.isNotEmpty) {
+      matched = products.first;
     }
 
     final displayPrice = matched?.displayPrice ?? widget.scene.pricing.displayPrice;
@@ -399,6 +416,11 @@ class _PayWallState extends ConsumerState<PayWall>
           label: '正在安全创建订单...',
           loading: true,
         );
+      case _PayStep.verifying:
+        return const _PayButton(
+          label: '正在安全确认支付结果...',
+          loading: true,
+        );
       case _PayStep.waiting:
         return _PayButton(
           label: '我已完成支付',
@@ -421,10 +443,25 @@ class _PayWallState extends ConsumerState<PayWall>
 
     try {
       if (isIap) {
-        // IAP 支付链路
+        // IAP 渠道：从后台商品列表获取实际商品 ID（可能与场景 ID 不同）
+        final channel = ref.read(currentChannelProvider);
+        final productsAsync = ref.read(productsProvider(channel.name));
+        String iapProductId = widget.scene.sceneId; // 默认用场景 ID
+        productsAsync.whenData((products) {
+          if (products.isNotEmpty) {
+            // 优先匹配场景 ID，否则用第一个商品（如月度会员）
+            final matched = products.where((p) => p.productId == widget.scene.sceneId);
+            iapProductId = matched.isNotEmpty ? matched.first.productId : products.first.productId;
+          }
+        });
+
+        debugPrint('[PayWall] IAP 支付: sceneId=${widget.scene.sceneId}, iapProductId=$iapProductId');
         final success = await ref.read(paymentProvider.notifier).iapPurchase(
-          productId: widget.scene.sceneId,
+          productId: iapProductId,
           channel: _channel,
+          onVerifying: () {
+            if (mounted) setState(() => _step = _PayStep.verifying);
+          },
         );
         if (success) {
           await LocalCache.instance.delete('user_quota');
@@ -437,12 +474,15 @@ class _PayWallState extends ConsumerState<PayWall>
           }
         } else {
           final err = ref.read(paymentProvider).error;
+          debugPrint('[PayWall] IAP 支付失败: $err');
           if (mounted) {
             setState(() => _step = _PayStep.idle);
+            ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(err ?? '支付失败，请重试'),
                 backgroundColor: AppColors.error,
+                duration: const Duration(seconds: 5),
               ),
             );
           }

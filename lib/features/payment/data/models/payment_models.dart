@@ -17,7 +17,7 @@ enum PaymentChannel {
       this == honor;
 }
 
-enum OrderStatus { pending, paid, delivered, refunded, expired, closed }
+enum OrderStatus { pending, verifying, paid, delivered, cancelled, refunded, expired, closed }
 
 enum ProductType { consumable, nonConsumable, subscription }
 
@@ -120,7 +120,8 @@ class OrderRecord {
   String get displayAmount =>
       '¥${(amountCents / 100).toStringAsFixed(2)}';
   bool get isPaid => status == 'paid' || status == 'delivered';
-  bool get isPending => status == 'pending';
+  bool get isPending => status == 'pending' || status == 'verifying';
+  bool get isVerifying => status == 'verifying';
 }
 
 class QuotaInfo {

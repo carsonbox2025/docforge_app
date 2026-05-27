@@ -55,6 +55,35 @@ class PaymentDataSource {
     return OrderRecord.fromJson(data as Map<String, dynamic>);
   }
 
+  /// IAP 支付成功确认（pending → verifying）
+  Future<OrderRecord> confirmOrder(String orderNo, String receiptData) async {
+    final response = await _dio.post(
+      AppConstants.paymentOrderConfirmUrl(orderNo),
+      data: {
+        'app_key': AppConstants.appKey,
+        'receipt_data': receiptData,
+      },
+    );
+    final data = response.data['data'];
+    if (data == null) {
+      throw Exception(response.data['message'] ?? '确认失败');
+    }
+    return OrderRecord.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// 取消订单（用户取消/支付失败 → cancelled）
+  Future<OrderRecord> cancelOrder(String orderNo) async {
+    final response = await _dio.post(
+      AppConstants.paymentOrderCancelUrl(orderNo),
+      data: {'app_key': AppConstants.appKey},
+    );
+    final data = response.data['data'];
+    if (data == null) {
+      throw Exception(response.data['message'] ?? '取消失败');
+    }
+    return OrderRecord.fromJson(data as Map<String, dynamic>);
+  }
+
   /// 查询订单状态
   Future<OrderRecord> getOrder(String orderNo) async {
     final response = await _dio.get(AppConstants.paymentOrderUrl(orderNo));

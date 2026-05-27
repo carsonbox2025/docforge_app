@@ -66,6 +66,12 @@ android {
 
     buildTypes {
         release {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             // CI 在 steps 中解码 keystore 到 build/ 目录，本地无文件时降级 debug 签名
             val keystoreFile = file("${projectDir}/build/docforge-release.jks")
             if (keystoreFile.exists()) {
@@ -84,4 +90,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // 华为 HMS IAP + AGConnect 初始化
+    implementation("com.huawei.hms:iap:6.13.0.300")
+    implementation("com.huawei.agconnect:agconnect-core:1.9.1.301")
 }

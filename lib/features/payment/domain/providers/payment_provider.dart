@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/iap/channel_detector.dart';
@@ -85,24 +86,36 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   Future<bool> iapPurchase({
     required String productId,
     required PaymentChannel channel,
+    String productType = 'consumable',
+    VoidCallback? onVerifying,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
+    debugPrint('[Payment] iapPurchase 开始: product=$productId, channel=${channel.name}');
+    String? orderNo;
+    bool confirmed = false;
     try {
-      // 1. 创建本地订单
+      // 1. 创建订单
+      debugPrint('[Payment] 步骤1: 创建订单...');
       final order = await _ds.createOrder(CreateOrderRequest(
         appKey: AppConstants.appKey,
         channel: channel.name,
         productId: productId,
       ));
+      orderNo = order.orderNo;
       state = state.copyWith(currentOrder: order);
 
       // 2. 调原生 SDK 支付
+      debugPrint('[Payment] 步骤2: HMS SDK 支付...');
       final result = await _iap.launchPayFlow(
         productId: productId,
         orderNo: order.orderNo,
+        productType: order.productType,
       );
 
+      // 3. 支付失败/取消 → 通知后端取消订单
       if (!result.success || result.receiptData == null) {
+        debugPrint('[Payment] 步骤2失败: ${result.error}');
+        try { await _ds.cancelOrder(order.orderNo); } catch (_) {}
         state = state.copyWith(
           isLoading: false,
           error: result.error ?? '支付失败',
@@ -110,7 +123,13 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         return false;
       }
 
-      // 3. 写入本地防掉单队列
+      // 4. 支付成功 → confirm（receipt 入库 + 状态→verifying）
+      debugPrint('[Payment] 步骤3: confirm...');
+      await _ds.confirmOrder(order.orderNo, result.receiptData!);
+      confirmed = true;
+      onVerifying?.call();
+
+      // 5. 写入本地防掉单队列
       final queued = QueuedReceipt(
         orderNo: order.orderNo,
         receiptData: result.receiptData!,
@@ -120,11 +139,13 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
       );
       await IapReceiptQueue.instance.enqueue(queued);
 
-      // 4. 服务端验票并发货
+      // 6. 服务端验票
+      debugPrint('[Payment] 步骤4: 验票...');
       final verified = await _ds.verifyOrder(order.orderNo, result.receiptData!);
 
-      // 5. 验票成功，从防掉单队列中擦除
+      // 7. 验票成功，清除队列
       await IapReceiptQueue.instance.dequeue(order.orderNo);
+      debugPrint('[Payment] 完成: status=${verified.status}');
 
       state = state.copyWith(
         isLoading: false,
@@ -132,12 +153,28 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         purchaseSuccess: verified.isPaid,
       );
       return verified.isPaid;
+    } on PlatformException catch (e) {
+      debugPrint('[Payment] iapPurchase PlatformException: code=${e.code}, message=${e.message}');
+      if (orderNo != null) { try { await _ds.cancelOrder(orderNo); } catch (_) {} }
+      state = state.copyWith(isLoading: false, error: '支付失败(原生): ${e.message ?? e.code}');
+      return false;
+    } on MissingPluginException catch (e) {
+      debugPrint('[Payment] iapPurchase MissingPluginException: $e');
+      if (orderNo != null) { try { await _ds.cancelOrder(orderNo); } catch (_) {} }
+      state = state.copyWith(isLoading: false, error: 'HMS SDK 未初始化，请确认设备支持华为支付');
+      return false;
     } catch (e) {
       debugPrint('[Payment] iapPurchase error: $e');
-      state = state.copyWith(
-        isLoading: false,
-        error: '支付已成功，正在确认中。请稍后在"我的"页面查看会员状态',
-      );
+      if (confirmed) {
+        // confirm 已成功，receipt 已入库，说明验票阶段失败
+        state = state.copyWith(
+          isLoading: false,
+          error: '支付已成功但验票失败，请点击"恢复购买"补全权益',
+        );
+      } else {
+        if (orderNo != null) { try { await _ds.cancelOrder(orderNo); } catch (_) {} }
+        state = state.copyWith(isLoading: false, error: '支付失败: ${e.toString()}');
+      }
       return false;
     }
   }
