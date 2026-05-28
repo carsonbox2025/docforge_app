@@ -11,6 +11,7 @@ import '../../../../core/storage/local_cache.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/iap/iap_receipt_queue.dart';
 import '../../../../core/iap/channel_detector.dart';
+import '../../../../core/iap/iap_service.dart';
 import '../../../../core/iap/payment_logger.dart';
 import '../../../membership/data/models/membership_models.dart';
 import '../../../scene/data/models/scene_models.dart';
@@ -614,7 +615,7 @@ class _PayWallState extends ConsumerState<PayWall>
   }
 
   Future<void> _handleRestore(BuildContext context) async {
-    // 商店上架要求强校验的“恢复购买”
+    // 商店上架要求强校验的”恢复购买”
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -631,6 +632,49 @@ class _PayWallState extends ConsumerState<PayWall>
       // 3. 刷新配额状态
       await LocalCache.instance.delete('user_quota');
       ref.invalidate(quotaProvider);
+
+      // 4. [调试] 查询 HMS 已购记录并显示
+      if (ChannelDetector.isIap) {
+        try {
+          final iap = IapService();
+          final log = PaymentLogger.instance;
+          final allRecords = <Map<String, dynamic>>[];
+          for (final type in ['consumable', 'non_consumable', 'subscription']) {
+            try {
+              final pending = await iap.queryPendingPurchases(productType: type);
+              allRecords.addAll(pending.map((r) => {...r, '_source': '未确认($type)'}));
+            } catch (_) {}
+            try {
+              final records = await iap.restorePurchases(productType: type);
+              allRecords.addAll(records.map((r) => {...r, '_source': '已购($type)'}));
+            } catch (_) {}
+          }
+          if (mounted) {
+            Navigator.of(context).pop();
+            if (allRecords.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('HMS 无已购记录'), backgroundColor: Colors.orange),
+              );
+            } else {
+              final lines = allRecords.map((r) {
+                final source = r.remove('_source');
+                return '[$source]\n${r.entries.map((e) => '  ${e.key}: ${e.value}').join('\n')}';
+              }).join('\n\n');
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('HMS 已购记录', style: TextStyle(fontSize: 14)),
+                  content: Text(lines, style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
+                  actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('关闭'))],
+                ),
+              );
+            }
+          }
+          return;
+        } catch (e) {
+          PaymentLogger.instance.log('Restore', 'HMS 查询异常: $e');
+        }
+      }
 
       if (mounted) {
         Navigator.of(context).pop(); // 关闭 loading 框
