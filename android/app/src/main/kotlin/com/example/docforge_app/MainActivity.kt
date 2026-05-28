@@ -51,6 +51,13 @@ class MainActivity : FlutterActivity() {
                             result.success(emptyList<Any>())
                         }
                     }
+                    "queryPendingPurchases" -> {
+                        if (handler != null) {
+                            handler.queryPendingPurchases(call, result)
+                        } else {
+                            result.success(emptyList<Any>())
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }

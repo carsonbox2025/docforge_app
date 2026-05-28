@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/iap/payment_logger.dart';
 import '../../../../core/network/api_client.dart';
 import 'models/payment_models.dart';
 
@@ -8,22 +9,36 @@ class PaymentDataSource {
   final Dio _dio = ApiClient.instance.dio;
 
   /// 查询商品列表
-  Future<List<Product>> getProducts(String channel) async {
-    final response = await _dio.get(
-      AppConstants.paymentBase + '/products',
-      queryParameters: {
-        'app_key': AppConstants.appKey,
-        'channel': channel,
-      },
-    );
-    final data = response.data['data'];
-    if (data is List) {
-      return data
-          .cast<Map<String, dynamic>>()
-          .map((m) => Product.fromJson(m))
-          .toList();
+  Future<List<Product>> getProducts(String channel, {String? productType}) async {
+    final log = PaymentLogger.instance;
+    final queryParams = <String, dynamic>{
+      'app_key': AppConstants.appKey,
+      'channel': channel,
+    };
+    if (productType != null) {
+      queryParams['product_type'] = productType;
     }
-    return [];
+    log.log('API', '查询商品: channel=$channel, type=$productType');
+    try {
+      final response = await _dio.get(
+        AppConstants.paymentBase + '/products',
+        queryParameters: queryParams,
+      );
+      final data = response.data['data'];
+      if (data is List) {
+        final products = data
+            .cast<Map<String, dynamic>>()
+            .map((m) => Product.fromJson(m))
+            .toList();
+        log.log('API', '返回 ${products.length} 个商品: ${products.map((p) => "${p.productId}(${p.productType})").join(", ")}');
+        return products;
+      }
+      log.log('API', '返回数据非 List: ${data.runtimeType}');
+      return [];
+    } catch (e) {
+      log.log('API', '查询商品失败: $e');
+      return [];
+    }
   }
 
   /// 创建订单

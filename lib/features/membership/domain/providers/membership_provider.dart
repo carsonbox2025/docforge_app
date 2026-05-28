@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/iap/channel_detector.dart';
 import '../../../../core/iap/iap_receipt_queue.dart';
 import '../../../../core/iap/iap_service.dart';
+import '../../../../core/iap/payment_logger.dart';
 import '../../data/models/membership_models.dart';
 import '../../../payment/data/payment_data_source.dart';
 import '../../../payment/data/models/payment_models.dart';
@@ -20,7 +22,8 @@ class PaymentLaunchResult {
 
 class MembershipState {
   final QuotaInfo? quota;
-  final PlanType selectedPlan;
+  final List<Product> subscriptionProducts;
+  final int selectedProductIndex;
   final PaymentChannel channel;
   final bool isLoading;
   final int totalScenes;
@@ -29,13 +32,17 @@ class MembershipState {
 
   const MembershipState({
     this.quota,
-    this.selectedPlan = PlanType.yearly,
+    this.subscriptionProducts = const [],
+    this.selectedProductIndex = 0,
     this.channel = PaymentChannel.alipay,
     this.isLoading = false,
     this.totalScenes = 0,
     this.successMessage,
     this.errorMessage,
   });
+
+  Product? get selectedProduct =>
+      subscriptionProducts.isNotEmpty ? subscriptionProducts[selectedProductIndex.clamp(0, subscriptionProducts.length - 1)] : null;
 
   List<BenefitItem> buildBenefits(List<SceneConfig> scenes) {
     final items = <BenefitItem>[];
@@ -61,7 +68,8 @@ class MembershipState {
 
   MembershipState copyWith({
     QuotaInfo? quota,
-    PlanType? selectedPlan,
+    List<Product>? subscriptionProducts,
+    int? selectedProductIndex,
     PaymentChannel? channel,
     bool? isLoading,
     int? totalScenes,
@@ -72,7 +80,8 @@ class MembershipState {
   }) {
     return MembershipState(
       quota: quota ?? this.quota,
-      selectedPlan: selectedPlan ?? this.selectedPlan,
+      subscriptionProducts: subscriptionProducts ?? this.subscriptionProducts,
+      selectedProductIndex: selectedProductIndex ?? this.selectedProductIndex,
       channel: channel ?? this.channel,
       isLoading: isLoading ?? this.isLoading,
       totalScenes: totalScenes ?? this.totalScenes,
@@ -105,9 +114,34 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
     }
 
     await Future.wait([
-      _loadSceneStats(),
-      loadQuota(),
+      _loadSceneStats().catchError((e) => debugPrint('[Membership] _loadSceneStats failed: $e')),
+      loadQuota().catchError((e) => debugPrint('[Membership] loadQuota failed: $e')),
+      _loadSubscriptionProducts().catchError((e) => debugPrint('[Membership] _loadSubscriptionProducts failed: $e')),
     ]);
+  }
+
+  Future<void> _loadSubscriptionProducts() async {
+    try {
+      final channel = state.channel.name;
+      List<Product> products;
+      if (state.isIap) {
+        // IAP 渠道：查全类型（华为等渠道的商品可能是 consumable/non_consumable）
+        final consumables = await _paymentDs.getProducts(channel, productType: 'consumable');
+        final nonConsumables = await _paymentDs.getProducts(channel, productType: 'non_consumable');
+        final subscriptions = await _paymentDs.getProducts(channel, productType: 'subscription');
+        products = [...consumables, ...nonConsumables, ...subscriptions];
+      } else {
+        products = await _paymentDs.getProducts(channel, productType: 'subscription');
+      }
+      if (!mounted) return;
+      state = state.copyWith(subscriptionProducts: products);
+      debugPrint('[Membership] 加载商品: ${products.length} 个, channel=$channel, isIap=${state.isIap}');
+      for (final p in products) {
+        debugPrint('[Membership]   ${p.productId} | ${p.productType} | ${p.name} | ${p.priceCents}分');
+      }
+    } catch (e) {
+      debugPrint('[Membership] 加载商品失败: $e');
+    }
   }
 
   Future<void> _loadSceneStats() async {
@@ -129,8 +163,8 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
     }
   }
 
-  void selectPlan(PlanType plan) {
-    state = state.copyWith(selectedPlan: plan, clearError: true, clearSuccess: true);
+  void selectProduct(int index) {
+    state = state.copyWith(selectedProductIndex: index, clearError: true, clearSuccess: true);
   }
 
   void selectChannel(PaymentChannel ch) {
@@ -164,30 +198,23 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
     }
   }
 
-  /// IAP 支付流程 — 从后台获取实际商品 ID（可能与 PlanType.productId 不同）
+  /// IAP 支付流程 — 直接用配置表的商品参数
   Future<PaymentLaunchResult?> _subscribeIap() async {
     final notifier = _ref.read(paymentProvider.notifier);
     final channel = state.channel;
+    final product = state.selectedProduct;
 
-    // 从后台获取 IAP 渠道的实际商品列表
-    String iapProductId = state.selectedPlan.productId;
-    try {
-      final products = await PaymentDataSource().getProducts(channel.name);
-      if (products.isNotEmpty) {
-        // 优先匹配 PlanType.productId，否则用第一个可用商品
-        final matched = products.where((p) => p.productId == state.selectedPlan.productId);
-        iapProductId = matched.isNotEmpty ? matched.first.productId : products.first.productId;
-        debugPrint('[Membership] IAP 商品: planProductId=${state.selectedPlan.productId}, iapProductId=$iapProductId');
-      } else {
-        debugPrint('[Membership] IAP 商品列表为空, 使用默认 productId=$iapProductId');
-      }
-    } catch (e) {
-      debugPrint('[Membership] 获取 IAP 商品失败: $e, 使用默认 productId=$iapProductId');
+    if (product == null) {
+      state = state.copyWith(isLoading: false, errorMessage: '无可用订阅商品，请检查商品配置');
+      return null;
     }
 
+    debugPrint('[Membership] IAP 支付: productId=${product.productId}, productType=${product.productType}, name=${product.name}');
+
     final success = await notifier.iapPurchase(
-      productId: iapProductId,
+      productId: product.productId,
       channel: channel,
+      productType: product.productType,
       onVerifying: () {
         state = state.copyWith(
           isLoading: false,
@@ -202,11 +229,10 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
       _invalidateGlobalQuota();
       state = state.copyWith(
         isLoading: false,
-        successMessage: '订阅成功！已激活${state.selectedPlan.label}',
+        successMessage: '订阅成功！已激活${product.name}',
       );
     } else {
       final error = _ref.read(paymentProvider).error ?? '';
-      // 检测"已购买"类错误，引导用户恢复购买
       if (error.contains('已购买') || error.contains('ALREADY_OWNED') || error.contains('恢复购买')) {
         state = state.copyWith(
           isLoading: false,
@@ -224,10 +250,15 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
 
   /// 在线支付流程
   Future<PaymentLaunchResult?> _subscribeOnline() async {
+    final product = state.selectedProduct;
+    if (product == null) {
+      state = state.copyWith(isLoading: false, errorMessage: '无可用订阅商品');
+      return null;
+    }
     final notifier = _ref.read(paymentProvider.notifier);
     final order = await notifier.createOrder(
       channel: state.channel,
-      productId: state.selectedPlan.productId,
+      productId: product.productId,
     );
 
     _pollOrder(order.orderNo);
@@ -240,7 +271,7 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
 
   /// 后台轮询订单状态
   Future<void> _pollOrder(String orderNo) async {
-    for (var i = 0; i < 60; i++) {
+    for (var i = 0; i < 20; i++) {
       await Future.delayed(const Duration(seconds: 3));
       if (!mounted || _cancelled) return;
       try {
@@ -250,7 +281,7 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
           _invalidateGlobalQuota();
           state = state.copyWith(
             isLoading: false,
-            successMessage: '订阅成功！已激活${state.selectedPlan.label}',
+            successMessage: '订阅成功！已激活Pro会员',
           );
           return;
         }
@@ -279,11 +310,62 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
       restored += serverOrders.where((o) => o.isPaid).length;
       verifying += serverOrders.where((o) => o.isVerifying).length;
 
-      // 3. 数据库没找到 → 从 HMS 服务器拉已购记录
+      // 3. 数据库没找到 → 从 HMS 服务器拉已购记录（按实际商品类型查询）
       if (restored == 0 && verifying == 0 && state.isIap) {
         final iap = IapService();
-        final purchases = await iap.restorePurchases(productType: 'subscription');
-        debugPrint('[Membership] HMS 已购记录: ${purchases.length} 条');
+        final log = PaymentLogger.instance;
+        List<Map<String, dynamic>> purchases = [];
+        String? hmsError;
+
+        // 3a. 优先用 queryPendingPurchases 查询未确认订单
+        try {
+          for (final type in ['consumable', 'non_consumable', 'subscription']) {
+            try {
+              log.log('Restore', '查询未确认订单: type=$type');
+              final pending = await iap.queryPendingPurchases(productType: type);
+              log.log('Restore', '未确认订单 $type: ${pending.length} 条');
+              purchases.addAll(pending);
+            } on PlatformException catch (e) {
+              log.log('Restore', '未确认订单查询 $type 失败: code=${e.code}, msg=${e.message}');
+            } catch (e) {
+              log.log('Restore', '未确认订单查询 $type 异常: $e');
+            }
+          }
+          debugPrint('[Membership] 未确认订单: ${purchases.length} 条');
+        } catch (e) {
+          log.log('Restore', '查询未确认订单失败: $e');
+        }
+
+        // 3b. 如果未确认订单也没找到，再用 obtainOwnedPurchaseRecord 查已完成记录
+        if (purchases.isEmpty) {
+          try {
+            for (final type in ['consumable', 'non_consumable', 'subscription']) {
+              try {
+                log.log('Restore', '查询 HMS 已购: type=$type');
+                final records = await iap.restorePurchases(productType: type);
+                log.log('Restore', 'HMS 返回 $type: ${records.length} 条');
+                purchases.addAll(records);
+              } on PlatformException catch (e) {
+                log.log('Restore', 'HMS 查询 $type 失败: code=${e.code}, msg=${e.message}');
+              } catch (e) {
+                log.log('Restore', 'HMS 查询 $type 异常: $e');
+              }
+            }
+            debugPrint('[Membership] HMS 已购记录: ${purchases.length} 条');
+          } catch (e) {
+            hmsError = e.toString();
+            debugPrint('[Membership] HMS 查询失败: $e');
+          }
+        }
+
+        if (purchases.isEmpty && hmsError != null) {
+          // HMS 查询本身就失败了
+          state = state.copyWith(
+            isLoading: false,
+            errorMessage: 'HMS 查询失败: $hmsError',
+          );
+          return;
+        }
 
         for (final purchase in purchases) {
           final purchaseToken = purchase['purchaseToken'] as String? ?? '';
@@ -292,22 +374,38 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
 
           try {
             debugPrint('[Membership] HMS 恢复验票: productId=$productId');
-            final ds = PaymentDataSource();
-            final order = await ds.createOrder(CreateOrderRequest(
+            final order = await _paymentDs.createOrder(CreateOrderRequest(
               appKey: AppConstants.appKey,
               channel: state.channel.name,
               productId: productId,
             ));
-            await ds.confirmOrder(order.orderNo, purchaseToken);
-            final verified = await ds.verifyOrder(order.orderNo, purchaseToken);
+            await _paymentDs.confirmOrder(order.orderNo, purchaseToken);
+            final verified = await _paymentDs.verifyOrder(order.orderNo, purchaseToken);
             if (verified.isPaid) {
               restored++;
+              // 消耗品需要 consume 闭环，否则华为侧保持"已拥有"
+              try {
+                final iap = IapService();
+                if (verified.productType == 'consumable') {
+                  await iap.consumePurchase(purchaseToken);
+                }
+              } catch (e) {
+                debugPrint('[Membership] 恢复 consume 失败(非致命): $e');
+              }
             } else if (verified.isVerifying) {
               verifying++;
             }
           } catch (e) {
             debugPrint('[Membership] HMS 恢复验票失败: $e');
           }
+        }
+
+        if (purchases.isEmpty && restored == 0 && verifying == 0) {
+          state = state.copyWith(
+            isLoading: false,
+            errorMessage: '华为端无已购记录，后端也无订单数据',
+          );
+          return;
         }
       }
 
@@ -333,7 +431,7 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
       }
     } catch (e) {
       debugPrint('[Membership] restorePurchases error: $e');
-      if (mounted) state = state.copyWith(isLoading: false, errorMessage: '恢复购买失败，请重试');
+      if (mounted) state = state.copyWith(isLoading: false, errorMessage: '恢复购买失败: $e');
     }
   }
 
@@ -364,9 +462,7 @@ class QuotaState {
 class QuotaNotifier extends StateNotifier<QuotaState> {
   final PaymentDataSource _ds;
 
-  QuotaNotifier(this._ds) : super(const QuotaState()) {
-    loadQuota();
-  }
+  QuotaNotifier(this._ds) : super(const QuotaState());
 
   Future<void> loadQuota() async {
     state = state.copyWith(isLoading: true, error: null);
@@ -387,7 +483,9 @@ class QuotaNotifier extends StateNotifier<QuotaState> {
 
 /// 全局配额 Provider — 统一入口，替代旧 profile/quota_provider 和 payment/quotaProvider
 final quotaProvider = StateNotifierProvider<QuotaNotifier, QuotaState>((ref) {
-  return QuotaNotifier(PaymentDataSource());
+  final notifier = QuotaNotifier(PaymentDataSource());
+  notifier.loadQuota();
+  return notifier;
 });
 
 final membershipProvider =

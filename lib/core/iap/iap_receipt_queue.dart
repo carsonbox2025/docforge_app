@@ -26,11 +26,11 @@ class QueuedReceipt {
   };
 
   factory QueuedReceipt.fromJson(Map<String, dynamic> json) => QueuedReceipt(
-    orderNo: json['orderNo'] as String,
-    receiptData: json['receiptData'] as String,
-    productId: json['productId'] as String,
-    channel: json['channel'] as String,
-    timestamp: json['timestamp'] as int,
+    orderNo: json['orderNo'] as String? ?? '',
+    receiptData: json['receiptData'] as String? ?? '',
+    productId: json['productId'] as String? ?? '',
+    channel: json['channel'] as String? ?? '',
+    timestamp: json['timestamp'] as int? ?? 0,
   );
 }
 
@@ -58,19 +58,27 @@ class IapReceiptQueue {
     _instance ??= IapReceiptQueue._(verifyCallback);
   }
 
-  /// 保存未完成的凭证到本地
+  /// 保存未完成的凭证到本地（存储失败不阻断支付流程）
   Future<void> enqueue(QueuedReceipt receipt) async {
-    final list = await _loadQueue();
-    list.removeWhere((r) => r.orderNo == receipt.orderNo);
-    list.add(receipt);
-    await _saveQueue(list);
+    try {
+      final list = await _loadQueue();
+      list.removeWhere((r) => r.orderNo == receipt.orderNo);
+      list.add(receipt);
+      await _saveQueue(list);
+    } catch (e) {
+      debugPrint('[IapQueue] enqueue 失败（非致命，receipt 已在服务端）: $e');
+    }
   }
 
   /// 移除已完成的凭证
   Future<void> dequeue(String orderNo) async {
-    final list = await _loadQueue();
-    list.removeWhere((r) => r.orderNo == orderNo);
-    await _saveQueue(list);
+    try {
+      final list = await _loadQueue();
+      list.removeWhere((r) => r.orderNo == orderNo);
+      await _saveQueue(list);
+    } catch (e) {
+      debugPrint('[IapQueue] dequeue 失败（非致命）: $e');
+    }
   }
 
   /// 执行队列内的所有凭证自动验票补单

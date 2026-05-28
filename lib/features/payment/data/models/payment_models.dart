@@ -27,6 +27,7 @@ class Product {
   final String name;
   final int priceCents;
   final String currency;
+  final String? period; // monthly / yearly
 
   const Product({
     required this.productId,
@@ -34,6 +35,7 @@ class Product {
     required this.name,
     required this.priceCents,
     this.currency = 'CNY',
+    this.period,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) => Product(
@@ -42,7 +44,14 @@ class Product {
         name: json['name'] as String? ?? '',
         priceCents: json['price_cents'] as int? ?? 0,
         currency: json['currency'] as String? ?? 'CNY',
+        period: json['period'] as String?,
       );
+
+  String get periodLabel => switch (period) {
+        'monthly' => '/月',
+        'yearly' => '/年',
+        _ => priceCents >= 5000 ? '/年' : '/月',
+      };
 
   String get displayPrice =>
       '¥${(priceCents / 100).toStringAsFixed(2)}';

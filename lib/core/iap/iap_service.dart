@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'channel_detector.dart';
+import 'payment_logger.dart';
 
 class ProductInfo {
   final String productId;
@@ -57,23 +58,25 @@ class IapService {
 
   IapChannel get channel => _channelType;
 
+  static PaymentLogger get _log => PaymentLogger.instance;
+
   /// 查询商品信息
   Future<List<ProductInfo>> queryProducts(
     List<String> productIds, {
     String productType = 'consumable',
   }) async {
     if (_channelType == IapChannel.official) {
-      debugPrint('[IAP] 跳过查询: 当前为 official 渠道');
+      _log.log('IAP', '跳过查询: 当前为 official 渠道');
       return [];
     }
-    debugPrint('[IAP] 查询商品: ids=$productIds, type=$productType, channel=${_channelType.name}');
+    _log.log('IAP', '查询商品: ids=$productIds, type=$productType, channel=${_channelType.name}');
     try {
       final List result = await _channel.invokeMethod('queryProducts', {
         'channel': _channelType.name,
         'productIds': productIds,
         'productType': productType,
       });
-      debugPrint('[IAP] 查询商品成功: ${result.length} 个');
+      _log.log('IAP', '查询商品成功: ${result.length} 个');
       return result
           .cast<Map>()
           .map((m) => ProductInfo(
@@ -84,10 +87,10 @@ class IapService {
               ))
           .toList();
     } on PlatformException catch (e) {
-      debugPrint('[IAP] 查询商品 PlatformException: code=${e.code}, msg=${e.message}');
+      _log.log('IAP', '查询商品 PlatformException: code=${e.code}, msg=${e.message}');
       return [];
     } on MissingPluginException catch (e) {
-      debugPrint('[IAP] 查询商品 MissingPluginException: $e');
+      _log.log('IAP', '查询商品 MissingPluginException: $e');
       return [];
     }
   }
@@ -99,10 +102,10 @@ class IapService {
     String productType = 'consumable',
   }) async {
     if (_channelType == IapChannel.official) {
-      debugPrint('[IAP] 跳过支付: 当前为 official 渠道');
+      _log.log('IAP', '跳过支付: 当前为 official 渠道');
       return const PurchaseResult(error: '官方渠道不支持 IAP');
     }
-    debugPrint('[IAP] 发起支付: productId=$productId, orderNo=$orderNo, type=$productType, channel=${_channelType.name}');
+    _log.log('IAP', '发起支付: productId=$productId, orderNo=$orderNo, type=$productType, channel=${_channelType.name}');
     try {
       final Map? result = await _channel.invokeMethod('launchPayFlow', {
         'channel': _channelType.name,
@@ -111,11 +114,11 @@ class IapService {
         'productType': productType,
       });
       if (result == null) {
-        debugPrint('[IAP] 支付返回 null');
+        _log.log('IAP', '支付返回 null');
         return const PurchaseResult(error: '支付结果为空（SDK 未返回数据）');
       }
       final success = result['success'] as bool? ?? false;
-      debugPrint('[IAP] 支付结果: success=$success, hasReceipt=${result['receiptData'] != null}, error=${result['error']}');
+      _log.log('IAP', '支付结果: success=$success, hasReceipt=${result['receiptData'] != null}, error=${result['error']}');
       return PurchaseResult(
         success: success,
         receiptData: result['receiptData'] as String?,
@@ -125,13 +128,13 @@ class IapService {
         error: success ? null : (result['error'] as String? ?? '支付失败'),
       );
     } on PlatformException catch (e) {
-      debugPrint('[IAP] 支付 PlatformException: code=${e.code}, msg=${e.message}, details=${e.details}');
+      _log.log('IAP', '支付 PlatformException: code=${e.code}, msg=${e.message}, details=${e.details}');
       if (e.code == 'ALREADY_OWNED') {
         return PurchaseResult(error: '您已购买此商品，请点击"恢复购买"完成激活');
       }
       return PurchaseResult(error: '支付异常(${e.code}): ${e.message ?? "未知错误"}');
     } on MissingPluginException catch (e) {
-      debugPrint('[IAP] 支付 MissingPluginException: $e');
+      _log.log('IAP', '支付 MissingPluginException: $e');
       return PurchaseResult(error: 'HMS SDK 未初始化或方法未注册，请确认设备支持华为支付');
     }
   }
@@ -151,28 +154,53 @@ class IapService {
     }
   }
 
-  /// 从 HMS 服务器查询已购记录（用于恢复购买）
-  Future<List<Map<String, dynamic>>> restorePurchases({
-    String productType = 'subscription',
+  /// 查询未确认订单（obtainOwnedPurchases）— 恢复购买时优先使用
+  Future<List<Map<String, dynamic>>> queryPendingPurchases({
+    String productType = 'consumable',
   }) async {
     if (_channelType == IapChannel.official) return [];
-    debugPrint('[IAP] 恢复购买: 从 HMS 服务器查询已购记录, type=$productType');
+    _log.log('IAP', '查询未确认订单: type=$productType, channel=${_channelType.name}');
     try {
-      final List result = await _channel.invokeMethod('restorePurchases', {
+      final List result = await _channel.invokeMethod('queryPendingPurchases', {
         'channel': _channelType.name,
         'productType': productType,
       });
-      debugPrint('[IAP] HMS 已购记录: ${result.length} 条');
+      _log.log('IAP', '未确认订单: ${result.length} 条 (type=$productType)');
       return result
           .cast<Map>()
           .map((m) => Map<String, dynamic>.from(m))
           .toList();
     } on PlatformException catch (e) {
-      debugPrint('[IAP] 恢复购买 PlatformException: code=${e.code}, msg=${e.message}');
-      return [];
+      _log.log('IAP', '查询未确认订单失败: code=${e.code}, msg=${e.message}');
+      rethrow;
     } on MissingPluginException catch (e) {
-      debugPrint('[IAP] 恢复购买 MissingPluginException: $e');
-      return [];
+      _log.log('IAP', '查询未确认订单 MissingPlugin: $e');
+      rethrow;
+    }
+  }
+
+  /// 从 HMS 服务器查询已购记录（用于恢复购买）
+  Future<List<Map<String, dynamic>>> restorePurchases({
+    String productType = 'subscription',
+  }) async {
+    if (_channelType == IapChannel.official) return [];
+    _log.log('IAP', '查询已购: type=$productType, channel=${_channelType.name}');
+    try {
+      final List result = await _channel.invokeMethod('restorePurchases', {
+        'channel': _channelType.name,
+        'productType': productType,
+      });
+      _log.log('IAP', '已购记录: ${result.length} 条 (type=$productType)');
+      return result
+          .cast<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+    } on PlatformException catch (e) {
+      _log.log('IAP', '查询已购失败: code=${e.code}, msg=${e.message}');
+      rethrow;
+    } on MissingPluginException catch (e) {
+      _log.log('IAP', '查询已购 MissingPlugin: $e');
+      rethrow;
     }
   }
 }

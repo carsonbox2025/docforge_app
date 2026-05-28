@@ -221,15 +221,36 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   }
 
   Widget _buildPlanSelector(WidgetRef ref, MembershipState state) {
+    final products = state.subscriptionProducts;
+    if (products.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: const Text('暂无可用订阅商品', style: TextStyle(fontSize: 14, color: AppColors.textMuted)),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       child: Row(
-        children: PlanType.values.map((plan) {
-          final isSelected = state.selectedPlan == plan;
-          final isRecommended = plan == PlanType.yearly;
+        children: products.asMap().entries.map((entry) {
+          final index = entry.key;
+          final product = entry.value;
+          final isSelected = state.selectedProductIndex == index;
+          final isRecommended = index == products.length - 1 && products.length > 1;
+          final priceStr = '¥${(product.priceCents / 100).toStringAsFixed(2)}';
+          final period = product.periodLabel;
+
           return Expanded(
             child: GestureDetector(
-              onTap: () => ref.read(membershipProvider.notifier).selectPlan(plan),
+              onTap: () => ref.read(membershipProvider.notifier).selectProduct(index),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -248,7 +269,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
                     Column(
                       children: [
                         Text(
-                          plan.price,
+                          priceStr,
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
@@ -256,13 +277,14 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
                           ),
                         ),
                         Text(
-                          plan.period.isEmpty ? '买断' : plan.period,
+                          period,
                           style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          plan == PlanType.yearly ? '约¥${(plan.priceNum / 12).toStringAsFixed(1)}/月' : (plan == PlanType.lifetime ? '一次付费' : ''),
+                          product.name,
                           style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -328,7 +350,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
         final benefits = scenesAsync.whenOrNull(
               data: (scenes) => state.buildBenefits(scenes),
             ) ??
-            [
+            <BenefitItem>[
               const BenefitItem(name: '生成次数', freeValue: '每场景1次', proValue: '∞', isFreeChecked: true),
               const BenefitItem(name: '文档精修', freeValue: '—', proValue: '∞', isFreeChecked: false),
               const BenefitItem(name: '多语言翻译', freeValue: '—', proValue: '6种语言', isFreeChecked: false),
@@ -584,12 +606,11 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   static String _ctaLabel(MembershipState state) {
     final quota = state.quota;
     final action = (quota == null || !quota.isPro) ? '立即订阅' : '立即续费';
-    final period = switch (state.selectedPlan) {
-      PlanType.monthly => '/月',
-      PlanType.yearly => '/年（约¥${(state.selectedPlan.priceNum / 12).toStringAsFixed(1)}/月）',
-      PlanType.lifetime => '（一次付费永久使用）',
-    };
-    return '$action · ${state.selectedPlan.price}$period';
+    final product = state.selectedProduct;
+    if (product == null) return action;
+    final priceStr = '¥${(product.priceCents / 100).toStringAsFixed(2)}';
+    final period = product.periodLabel;
+    return '$action · $priceStr$period';
   }
 }
 

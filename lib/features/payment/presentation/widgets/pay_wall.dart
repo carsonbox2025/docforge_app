@@ -6,9 +6,12 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/storage/local_cache.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/iap/iap_receipt_queue.dart';
+import '../../../../core/iap/channel_detector.dart';
+import '../../../../core/iap/payment_logger.dart';
 import '../../../membership/data/models/membership_models.dart';
 import '../../../scene/data/models/scene_models.dart';
 import '../../data/models/payment_models.dart';
@@ -47,18 +50,31 @@ class _PayWallState extends ConsumerState<PayWall>
   PaymentChannel _channel = PaymentChannel.alipay;
   _PayStep _step = _PayStep.idle;
   String? _orderNo;
+  bool _showLogPanel = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // 打开支付墙时，后台静默补单一次
     IapReceiptQueue.instance.processPendingQueue();
+    PaymentLogger.instance.addListener(_onLogUpdate);
+    // 打开时记录关键状态
+    final log = PaymentLogger.instance;
+    log.log('PayWall', '支付墙打开');
+    final channel = ChannelDetector.detect();
+    log.log('PayWall', '检测渠道: $channel, isIap=${channel != IapChannel.official}');
+    log.log('PayWall', 'apiOrigin: ${AppConstants.apiOrigin}');
+    log.log('PayWall', 'sceneId: ${widget.scene.sceneId}, sceneName: ${widget.scene.name}');
+  }
+
+  void _onLogUpdate() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    PaymentLogger.instance.removeListener(_onLogUpdate);
     super.dispose();
   }
 
@@ -173,6 +189,35 @@ class _PayWallState extends ConsumerState<PayWall>
                         : '支付安全保障 · 满意后再付款 · 支持开具增值税发票',
                     style: TextStyle(fontSize: 11, color: AppColors.textMuted.withOpacity(0.8)),
                   ),
+
+                // 日志面板切换按钮
+                if (_step != _PayStep.done) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () => setState(() => _showLogPanel = !_showLogPanel),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _showLogPanel ? Icons.expand_less : Icons.bug_report,
+                          size: 14,
+                          color: AppColors.textMuted,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _showLogPanel ? '收起日志' : '调试日志 (${PaymentLogger.instance.entries.length})',
+                          style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // 日志面板
+                if (_showLogPanel) ...[
+                  const SizedBox(height: 8),
+                  _buildLogPanel(),
+                ],
               ],
             ),
           ),
@@ -480,9 +525,11 @@ class _PayWallState extends ConsumerState<PayWall>
             ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(err ?? '支付失败，请重试'),
+                content: SingleChildScrollView(
+                  child: Text(err ?? '支付失败，请重试'),
+                ),
                 backgroundColor: AppColors.error,
-                duration: const Duration(seconds: 5),
+                duration: const Duration(seconds: 8),
               ),
             );
           }
@@ -605,6 +652,70 @@ class _PayWallState extends ConsumerState<PayWall>
         );
       }
     }
+  }
+
+  Widget _buildLogPanel() {
+    final entries = PaymentLogger.instance.entries;
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 220),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('支付流程日志', style: TextStyle(fontSize: 11, color: Color(0xFF00FF00), fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                GestureDetector(
+                  onTap: () {
+                    PaymentLogger.instance.clear();
+                  },
+                  child: const Text('清空', style: TextStyle(fontSize: 10, color: Color(0xFF888888))),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFF333333)),
+          Expanded(
+            child: entries.isEmpty
+                ? const Center(child: Text('暂无日志', style: TextStyle(fontSize: 11, color: Color(0xFF666666))))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    itemCount: entries.length,
+                    itemBuilder: (_, i) {
+                      final e = entries[i];
+                      Color tagColor;
+                      switch (e.tag) {
+                        case 'Channel': tagColor = const Color(0xFF61AFEF); break;
+                        case 'IAP': tagColor = const Color(0xFFE5C07B); break;
+                        case 'Pay': tagColor = const Color(0xFF98C379); break;
+                        case 'Order': tagColor = const Color(0xFFC678DD); break;
+                        default: tagColor = const Color(0xFFABB2BF);
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: RichText(
+                          text: TextSpan(
+                            style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Color(0xFFABB2BF)),
+                            children: [
+                              TextSpan(text: '${e.time.toIso8601String().substring(11, 19)} ', style: const TextStyle(color: Color(0xFF666666))),
+                              TextSpan(text: '[${e.tag}]', style: TextStyle(color: tagColor, fontWeight: FontWeight.bold)),
+                              TextSpan(text: ' ${e.message}'),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showHelpDialog(BuildContext context) {
