@@ -61,17 +61,20 @@ class CreateOrderRequest {
   final String appKey;
   final String channel;
   final String productId;
+  final bool sandbox;
 
   const CreateOrderRequest({
     required this.appKey,
     required this.channel,
     required this.productId,
+    this.sandbox = false,
   });
 
   Map<String, dynamic> toJson() => {
         'app_key': appKey,
         'channel': channel,
         'product_id': productId,
+        'sandbox': sandbox,
       };
 }
 

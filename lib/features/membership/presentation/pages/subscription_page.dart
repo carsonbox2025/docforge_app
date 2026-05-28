@@ -4,8 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/iap/channel_detector.dart';
-import '../../../../core/iap/iap_service.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../shared/widgets/common_widgets.dart';
 import '../../../../shared/widgets/payment_channel_card.dart';
@@ -568,41 +566,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   }
 
   Future<void> _handleRestore(WidgetRef ref) async {
-    // 先执行正常恢复流程
     await ref.read(membershipProvider.notifier).restorePurchases();
-
-    // [调试] 查询 HMS 已购记录并弹窗显示
-    if (!ChannelDetector.isIap || !mounted) return;
-    try {
-      final iap = IapService();
-      final allRecords = <Map<String, dynamic>>[];
-      for (final type in ['consumable', 'non_consumable', 'subscription']) {
-        try {
-          final pending = await iap.queryPendingPurchases(productType: type);
-          allRecords.addAll(pending.map((r) => {...r, '_source': '未确认($type)'}));
-        } catch (_) {}
-        try {
-          final records = await iap.restorePurchases(productType: type);
-          allRecords.addAll(records.map((r) => {...r, '_source': '已购($type)'}));
-        } catch (_) {}
-      }
-      if (!mounted) return;
-      if (allRecords.isEmpty) return;
-      final lines = allRecords.map((r) {
-        final source = r.remove('_source');
-        return '[$source]\n${r.entries.map((e) => '  ${e.key}: ${e.value}').join('\n')}';
-      }).join('\n\n');
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('HMS 已购记录', style: TextStyle(fontSize: 14)),
-          content: SingleChildScrollView(
-            child: Text(lines, style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
-          ),
-          actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('关闭'))],
-        ),
-      );
-    } catch (_) {}
   }
 
   Widget _buildFooterNote() {

@@ -378,6 +378,7 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
               appKey: AppConstants.appKey,
               channel: state.channel.name,
               productId: productId,
+              sandbox: !kReleaseMode,
             ));
             await _paymentDs.confirmOrder(order.orderNo, purchaseToken);
             final verified = await _paymentDs.verifyOrder(order.orderNo, purchaseToken);

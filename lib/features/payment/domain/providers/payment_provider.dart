@@ -109,6 +109,7 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         appKey: AppConstants.appKey,
         channel: channel.name,
         productId: productId,
+        sandbox: !kReleaseMode,
       ));
       state = state.copyWith(isLoading: false, currentOrder: order);
       _log.log('Order', '订单创建成功: orderNo=${order.orderNo}, type=${order.productType}, amount=${order.amountCents}');
@@ -141,6 +142,7 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         appKey: AppConstants.appKey,
         channel: channel.name,
         productId: productId,
+        sandbox: !kReleaseMode,
       ));
       orderNo = order.orderNo;
       final actualProductType = order.productType;
