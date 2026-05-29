@@ -14,7 +14,7 @@ class AppConstants {
   static const String smsMockCode = '123456';
 
   // 联系方式
-  static const String officialWebsite = 'http://61.132.52.22:8084/aistudio/service/docforge/web';
+  static const String officialWebsite = 'http://docforge.com.cn/';
   static const String supportEmail = 'docforge@126.com';
   static const String wechatAccount = 'DocForge';
 
@@ -26,7 +26,7 @@ class AppConstants {
     if (_envHost.isNotEmpty) return _envHost;
     if (kIsWeb) return 'http://localhost:8000';
     if (!kReleaseMode && Platform.isAndroid) return 'http://10.0.2.2:8000';
-    if (kReleaseMode) return 'http://61.132.52.22:8084';
+    if (kReleaseMode) return 'http://docforge.com.cn';
     return 'http://localhost:8000';
   }
 
