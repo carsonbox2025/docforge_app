@@ -43,8 +43,11 @@ class HuaweiIapHandler(
 
         if (resultCode != Activity.RESULT_OK || data == null) {
             val map = mapOf("success" to false, "error" to "用户取消支付")
-            cachedResult = map
-            result?.success(map)
+            if (result != null) {
+                result.success(map)
+            } else {
+                cachedResult = map
+            }
             return true
         }
 
@@ -63,8 +66,11 @@ class HuaweiIapHandler(
 
                 if (purchaseToken.isEmpty()) {
                     val map = mapOf("success" to false, "error" to "无法解析 purchaseToken")
-                    cachedResult = map
-                    result?.success(map)
+                    if (result != null) {
+                        result.success(map)
+                    } else {
+                        cachedResult = map
+                    }
                     return true
                 }
 
@@ -74,21 +80,30 @@ class HuaweiIapHandler(
                     "purchaseData" to purchaseData,
                     "signature" to signature,
                 )
-                cachedResult = map
-                result?.success(map)
+                if (result != null) {
+                    result.success(map)
+                } else {
+                    cachedResult = map
+                }
             }
             OrderStatusCode.ORDER_STATE_CANCEL -> {
                 val map = mapOf("success" to false, "error" to "用户取消")
-                cachedResult = map
-                result?.success(map)
+                if (result != null) {
+                    result.success(map)
+                } else {
+                    cachedResult = map
+                }
             }
             else -> {
                 val map = mapOf(
                     "success" to false,
                     "error" to "支付失败(code=${purchaseResultInfo.returnCode}): ${purchaseResultInfo.errMsg}",
                 )
-                cachedResult = map
-                result?.success(map)
+                if (result != null) {
+                    result.success(map)
+                } else {
+                    cachedResult = map
+                }
             }
         }
         return true
