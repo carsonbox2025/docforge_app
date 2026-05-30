@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// 读取 key.properties 签名配置
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
 android {
@@ -21,6 +30,17 @@ android {
     defaultConfig {
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     flavorDimensions += "channel"
@@ -72,17 +92,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // CI 在 steps 中解码 keystore 到 build/ 目录，本地无文件时降级 debug 签名
-            val keystoreFile = file("${projectDir}/build/docforge-release.jks")
-            if (keystoreFile.exists()) {
-                signingConfig = signingConfigs.create("release") {
-                    storeFile = keystoreFile
-                    storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
-                    keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: ""
-                    keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
-                }
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
             } else {
-                signingConfig = signingConfigs.getByName("debug")
+                signingConfigs.getByName("debug")
             }
         }
     }

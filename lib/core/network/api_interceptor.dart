@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'api_client.dart';
@@ -32,8 +33,44 @@ class ApiInterceptor extends Interceptor {
       final codeStr = data is Map<String, dynamic> ? '${data['code']}' : 'binary';
       debugPrint('[API←] ${response.requestOptions.method} ${response.requestOptions.path} $elapsed code=$codeStr');
     }
+
+    // 容错：如果返回的是 String，且内容是 JSON 格式，手动进行解码
+    if (response.data is String) {
+      final dataStr = (response.data as String).trim();
+      if (dataStr.startsWith('{') && dataStr.endsWith('}')) {
+        try {
+          response.data = jsonDecode(dataStr);
+        } catch (_) {}
+      }
+    }
+
     final data = response.data;
-    if (data is! Map<String, dynamic> || !data.containsKey('code')) {
+
+    // 二进制响应（文件下载等）直接放行
+    if (data is List<int>) {
+      handler.next(response);
+      return;
+    }
+
+    // 如果返回数据最终不是 Map<String, dynamic>，说明受到了运营商劫持或服务器返回了 HTML 错误网页
+    if (data is! Map<String, dynamic>) {
+      final dataStr = data.toString();
+      final isHtml = dataStr.contains('<!DOCTYPE html>') || dataStr.contains('<html') || dataStr.contains('<body');
+      
+      handler.reject(
+        DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          error: isHtml 
+              ? '当前请求已被移动网络阻断或劫持（可能是域名未接入备案或未配置 HTTPS）。请尝试连接 Wi-Fi 或联系客服。'
+              : '服务器响应格式异常，请稍后重试。',
+          type: DioExceptionType.badResponse,
+        ),
+      );
+      return;
+    }
+
+    if (!data.containsKey('code')) {
       handler.next(response);
       return;
     }
@@ -114,6 +151,41 @@ class ApiInterceptor extends Interceptor {
       }
       debugPrint('[API✗] error: ${err.error}');
     }
+    // 底层网络异常转译为用户友好文案
+    final friendly = _friendlyNetworkMessage(err);
+    if (friendly != null) {
+      handler.next(DioException(
+        requestOptions: err.requestOptions,
+        response: err.response,
+        error: friendly,
+        type: err.type,
+      ));
+      return;
+    }
     handler.next(err);
+  }
+
+  /// 将底层网络异常转译为用户友好文案；返回 null 表示无需转译
+  static String? _friendlyNetworkMessage(DioException err) {
+    return switch (err.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout =>
+        '网络连接超时，请检查网络后重试',
+      DioExceptionType.connectionError =>
+        '无法连接到服务器，请检查网络连接',
+      DioExceptionType.badResponse => () {
+          final status = err.response?.statusCode;
+          return switch (status) {
+            400 => '请求参数错误，请稍后重试',
+            404 => '请求的服务不存在',
+            500 => '服务器开小差了，请稍后重试',
+            502 || 503 => '服务器维护中，请稍后重试',
+            _ => null,
+          };
+        }(),
+      DioExceptionType.cancel => null,
+      _ => '网络请求失败，请稍后重试',
+    };
   }
 }
