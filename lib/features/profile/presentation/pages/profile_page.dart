@@ -661,48 +661,36 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           ),
         ),
         actions: [
-          SizedBox(
-            height: 44,
-            child: OutlinedButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.border),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
-              ),
-              child: const Text(
-                '取消',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text(
+              '取消',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          SizedBox(
-            height: 44,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                ref.read(authProvider.notifier).logout();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              ref.read(authProvider.notifier).logout();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text(
-                '退出',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
+            ),
+            child: const Text(
+              '退出',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),

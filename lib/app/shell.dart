@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/constants/app_colors.dart';
@@ -24,22 +23,9 @@ class AppNavigationShell extends ConsumerWidget {
     final unreadAsync = ref.watch(unreadCountProvider);
     final unreadCount = unreadAsync.maybeWhen(data: (c) => c, orElse: () => 0);
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        if (navigationShell.currentIndex == 0) {
-          final shouldExit = await _showExitConfirmDialog(context);
-          if (shouldExit == true && context.mounted) {
-            SystemNavigator.pop();
-          }
-        } else {
-          navigationShell.goBranch(0);
-        }
-      },
-      child: Scaffold(
-        body: navigationShell,
-        bottomNavigationBar: Container(
+    return Scaffold(
+      body: navigationShell,
+      bottomNavigationBar: Container(
           decoration: const BoxDecoration(
             border: Border(top: BorderSide(color: AppColors.border)),
           ),
@@ -66,36 +52,6 @@ class AppNavigationShell extends ConsumerWidget {
               _profileNavItem(unreadCount),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Future<bool?> _showExitConfirmDialog(BuildContext context) {
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          '确定要退出吗？',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('退出', style: TextStyle(fontWeight: FontWeight.w600)),
-          ),
-        ],
       ),
     );
   }

@@ -105,9 +105,15 @@ class _LegalPageState extends State<LegalPage> {
               ? _buildError()
               : _content.isEmpty
                   ? const Center(child: Text('暂无内容', style: TextStyle(color: AppColors.textMuted)))
-                  : MarkdownBody(
+                  : Markdown(
                       data: _content,
-                      selectable: true,
+                      selectable: false,
+                      padding: const EdgeInsets.all(16),
+                      styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                        p: const TextStyle(fontSize: 14, height: 1.8, color: AppColors.text),
+                        h2: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text),
+                        h3: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.text),
+                      ),
                     ),
     );
   }

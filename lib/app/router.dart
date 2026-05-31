@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'shell.dart';
 import '../features/auth/presentation/pages/splash_page.dart';
 import '../features/auth/presentation/pages/login_page.dart';
 import '../features/auth/presentation/pages/profile_setup_page.dart';
@@ -27,9 +28,8 @@ import '../features/profile/presentation/pages/about_page.dart';
 import '../features/auth/presentation/pages/legal_page.dart';
 import '../features/auth/presentation/pages/forgot_password_page.dart';
 import '../features/feedback/presentation/pages/feedback_page.dart';
-import 'shell.dart';
 
-final _rootNavigatorKey = GlobalKey<NavigatorState>();
+final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 CustomTransitionPage _fastFadePage(Widget child, ValueKey<String> key) {
   return CustomTransitionPage(
@@ -55,7 +55,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   });
 
   return GoRouter(
-    navigatorKey: _rootNavigatorKey,
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
     refreshListenable: authNotifier,
     redirect: (context, state) {
