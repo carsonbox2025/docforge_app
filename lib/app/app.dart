@@ -52,20 +52,43 @@ class _DocForgeAppState extends ConsumerState<DocForgeApp>
     final shouldExit = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+        contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
         title: const Text(
           '确定要退出吗？',
           style: TextStyle(
-              fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text),
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: AppColors.text,
+          ),
+        ),
+        content: const Text(
+          '退出后需要重新打开应用',
+          style: TextStyle(
+            fontSize: 13,
+            color: AppColors.textMuted,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             child: const Text('取消',
-                style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600)),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -73,11 +96,15 @@ class _DocForgeAppState extends ConsumerState<DocForgeApp>
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('退出',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

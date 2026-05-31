@@ -642,13 +642,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.border),
         ),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+        contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
         title: const Text(
           '确认退出',
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
             color: AppColors.text,
           ),
         ),
@@ -656,23 +660,26 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           '退出后需要重新登录才能使用',
           style: TextStyle(
             fontSize: 13,
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w500,
+            color: AppColors.textMuted,
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(
-              '取消',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
+            child: const Text(
+              '取消',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
-          const SizedBox(width: 8),
           ElevatedButton(
             onPressed: () {
               Navigator.of(ctx).pop();
@@ -682,16 +689,16 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
               elevation: 0,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
             child: const Text(
               '退出',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
         ],
