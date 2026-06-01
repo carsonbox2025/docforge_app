@@ -65,7 +65,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
     try {
       final resp = await ref.read(authProvider.notifier).sendSmsCode(phone);
-      if (AppConstants.smsMockMode && resp['mock_code'] != null) {
+      if (resp['mock_code'] != null) {
         setState(() { _mockCode = resp['mock_code'] as String; });
       }
       setState(() { _codeSent = true; _countdown = 60; });
@@ -203,8 +203,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget _buildSmsForm(bool isLoading) {
     return Column(
       children: [
-        if (AppConstants.smsMockMode) _buildMockBanner(),
-        if (AppConstants.smsMockMode) const SizedBox(height: 16),
+        if (_mockCode != null) _buildMockBanner(),
+        if (_mockCode != null) const SizedBox(height: 16),
         _buildFieldLabel('手机号'),
         const SizedBox(height: 6),
         TextField(

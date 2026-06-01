@@ -59,16 +59,22 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               _MenuItem(
                 icon: Icons.history,
                 title: '历史文档',
+                iconBgColor: AppColors.primaryBg,
+                iconColor: AppColors.primary,
                 onTap: () => context.push('/documents'),
               ),
               _MenuItem(
                 icon: Icons.bookmark_outline,
                 title: '收藏模板',
+                iconBgColor: const Color(0x0FF59E0B),
+                iconColor: AppColors.warn,
                 onTap: () => context.push('/templates'),
               ),
               _MenuItem(
                 icon: Icons.feedback_outlined,
                 title: '问题反馈',
+                iconBgColor: AppColors.infoBg,
+                iconColor: AppColors.info,
                 onTap: () => context.push('/feedback'),
               ),
             ]),
@@ -80,11 +86,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 tag: '得5次额度',
                 tagColor: AppColors.cta,
                 tagBgColor: AppColors.ctaBg,
+                iconBgColor: AppColors.ctaBg,
+                iconColor: AppColors.cta,
                 onTap: () {},
               ),
               _MenuItem(
                 icon: Icons.share_outlined,
                 title: '分享到微信',
+                iconBgColor: AppColors.successBg,
+                iconColor: AppColors.success,
                 onTap: () {},
               ),
             ]),
@@ -93,11 +103,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               _MenuItem(
                 icon: Icons.settings_outlined,
                 title: '设置',
+                iconBgColor: const Color(0x0F7C3AED),
+                iconColor: AppColors.purple,
                 onTap: () => context.push('/settings'),
               ),
               _MenuItem(
                 icon: Icons.info_outline,
                 title: '关于${AppConstants.appName}',
+                iconBgColor: const Color(0x0F64748B),
+                iconColor: const Color(0xFF64748B),
                 onTap: () => context.push('/about'),
               ),
             ]),
@@ -116,9 +130,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.primary,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(28),
-          bottomRight: Radius.circular(28),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(20),
+          bottomRight: Radius.circular(20),
         ),
       ),
       padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 40),
@@ -147,7 +161,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                   height: 56,
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(16),
+                    shape: BoxShape.circle,
                   ),
                   child: Center(
                     child: Text(
@@ -532,7 +546,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.03),
@@ -547,8 +562,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                   _buildMenuItem(items[i]),
                   if (i < items.length - 1)
                     Padding(
-                      padding: const EdgeInsets.only(left: 48),
-                      child: Container(height: 0.5, color: AppColors.borderLight),
+                      padding: const EdgeInsets.only(left: 52),
+                      child: Container(height: 1, color: AppColors.border),
                     ),
                 ],
               ],
@@ -562,12 +577,20 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   Widget _buildMenuItem(_MenuItem item) {
     return InkWell(
       onTap: item.onTap,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderRadius: BorderRadius.circular(14),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Icon(item.icon, size: 20, color: AppColors.textSecondary),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: item.iconBgColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(item.icon, size: 18, color: item.iconColor),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -616,9 +639,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             _showLogoutDialog();
           },
           style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: AppColors.error, width: 1),
+            backgroundColor: AppColors.errorBg,
+            side: const BorderSide(color: AppColors.error, width: 1.5),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
           child: const Text(
@@ -715,6 +739,8 @@ class _MenuItem {
   final String? tag;
   final Color? tagColor;
   final Color? tagBgColor;
+  final Color iconBgColor;
+  final Color iconColor;
   final VoidCallback onTap;
 
   const _MenuItem({
@@ -723,6 +749,8 @@ class _MenuItem {
     this.tag,
     this.tagColor,
     this.tagBgColor,
+    this.iconBgColor = AppColors.primaryBg,
+    this.iconColor = AppColors.primary,
     required this.onTap,
   });
 }
