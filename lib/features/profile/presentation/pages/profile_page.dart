@@ -52,8 +52,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(displayName, isPro, unreadCount),
-            _buildStatsRow(quotaState),
-            _buildQuotaCard(quotaState),
+            _buildUsageCard(quotaState),
             _buildSubscriptionBanner(),
             _buildMenuSection('常用', [
               _MenuItem(
@@ -71,6 +70,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 onTap: () => context.push('/templates'),
               ),
               _MenuItem(
+                icon: Icons.menu_book_outlined,
+                title: '术语表',
+                iconBgColor: const Color(0x0F7C3AED),
+                iconColor: AppColors.purple,
+                onTap: () => context.push('/glossary'),
+              ),
+              _MenuItem(
                 icon: Icons.feedback_outlined,
                 title: '问题反馈',
                 iconBgColor: AppColors.infoBg,
@@ -83,9 +89,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               _MenuItem(
                 icon: Icons.card_giftcard,
                 title: '推荐有礼',
-                tag: '得5次额度',
-                tagColor: AppColors.cta,
-                tagBgColor: AppColors.ctaBg,
+                tag: '即将上线',
+                tagColor: AppColors.textMuted,
+                tagBgColor: AppColors.surfaceHover,
                 iconBgColor: AppColors.ctaBg,
                 iconColor: AppColors.cta,
                 onTap: () {},
@@ -93,6 +99,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               _MenuItem(
                 icon: Icons.share_outlined,
                 title: '分享到微信',
+                tag: '即将上线',
+                tagColor: AppColors.textMuted,
+                tagBgColor: AppColors.surfaceHover,
                 iconBgColor: AppColors.successBg,
                 iconColor: AppColors.success,
                 onTap: () {},
@@ -117,7 +126,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ]),
             const SizedBox(height: 16),
             _buildLogoutButton(),
-            const SizedBox(height: 32),
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 24),
+              child: Text(
+                'v${AppConstants.appVersion}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+              ),
+            ),
           ],
         ),
       ),
@@ -283,173 +299,153 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     );
   }
 
-  // ─── Stats row ─────────────────────────────────────────────────────────────
+  // ─── Usage overview card ─────────────────────────────────────────────────
 
-  Widget _buildStatsRow(QuotaState quotaState) {
+  Widget _buildUsageCard(QuotaState quotaState) {
     if (quotaState.isLoading) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        child: Row(children: [
-          Expanded(child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted)))),
-          _buildStatDivider(),
-          Expanded(child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted)))),
-          _buildStatDivider(),
-          Expanded(child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted)))),
-        ]),
+      return Container(
+        margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Center(
+          child: SizedBox(
+            width: 20, height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted),
+          ),
+        ),
       );
     }
 
     final quota = quotaState.data;
     if (quota == null) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        child: Center(
-          child: GestureDetector(
-            onTap: () => context.go('/generate'),
-            child: Text('开始你的第一篇文档 →',
-              style: const TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600)),
-          ),
-        ),
-      );
-    }
-
-    // 从配额数据聚合统计
-    final generateTotal = quota.used['scene_generic'] ?? 0;
-    final polishTotal = (quota.used['scene_polish'] ?? 0) + (quota.used['scene_polish_long'] ?? 0);
-    final hasData = generateTotal > 0 || polishTotal > 0;
-    if (!hasData) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        child: Center(
-          child: GestureDetector(
-            onTap: () => context.go('/generate'),
-            child: Text('开始你的第一篇文档 →',
-              style: const TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600)),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      child: Row(
-        children: [
-          _buildStatItem('$generateTotal', '生成文档'),
-          _buildStatDivider(),
-          _buildStatItem('$polishTotal', '精修次数'),
-          _buildStatDivider(),
-          _buildStatItem(quota.planLabel, '当前套餐'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(String value, String label) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: AppColors.text,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textMuted,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatDivider() {
-    return Container(width: 1, height: 28, color: AppColors.border);
-  }
-
-  // ─── Quota card (floating) ─────────────────────────────────────────────────
-
-  Widget _buildQuotaCard(QuotaState quotaState) {
-    final quota = quotaState.data;
-
-    // 计算月度总剩余配额（不混入日限）
-    int totalRemaining = 0;
-    if (quota != null) {
-      for (final sceneId in quota.quotas.keys) {
-        final mr = quota.monthlyRemaining(sceneId);
-        if (mr > 0) totalRemaining += mr;
-      }
-    }
-
-    return Transform.translate(
-      offset: const Offset(0, -14),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      return Container(
+        margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Center(
+          child: GestureDetector(
+            onTap: () => context.go('/generate'),
+            child: const Text('开始你的第一篇文档 →',
+                style: TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      );
+    }
+
+    final generateTotal = quota.used['scene_generic'] ?? 0;
+    final polishTotal = (quota.used['scene_polish'] ?? 0) + (quota.used['scene_polish_long'] ?? 0);
+    final translateTotal = (quota.used['scene_translate'] ?? 0) + (quota.used['scene_translate_long'] ?? 0);
+
+    int totalQuota = 0;
+    int totalUsed = 0;
+    for (final sceneId in quota.quotas.keys) {
+      final limit = quota.quotas[sceneId] ?? 0;
+      if (limit > 0) {
+        totalQuota += limit;
+        totalUsed += quota.used[sceneId] ?? 0;
+      }
+    }
+    final hasQuota = totalQuota > 0;
+    final progress = hasQuota ? (totalUsed / totalQuota).clamp(0.0, 1.0) : 0.0;
+    final remaining = totalQuota - totalUsed;
+
+    return GestureDetector(
+      onTap: () => context.push('/usage'),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 1),
             ),
           ],
         ),
-        child: quotaState.isLoading
-            ? Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted)))
-            : Row(
-                children: [
-                  _buildQuotaItem('$totalRemaining', '剩余配额', AppColors.success, AppColors.successBg, onTap: () => context.push('/usage')),
-                  _buildQuotaItem('—', '模板收藏', AppColors.primary, AppColors.primaryBg, onTap: () => context.push('/templates')),
-                  _buildQuotaItem('—', '术语表', AppColors.cta, AppColors.ctaBg, onTap: () => context.push('/glossary')),
-                ],
-              ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text('剩余配额', style: TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 8),
+                          if (hasQuota)
+                            Text('$remaining/$totalQuota', style: const TextStyle(fontSize: 15, color: AppColors.text, fontWeight: FontWeight.w700))
+                          else
+                            const Text('无限', style: TextStyle(fontSize: 15, color: AppColors.primary, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                      if (hasQuota) ...[
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 6,
+                            backgroundColor: AppColors.borderLight,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              progress > 0.8 ? AppColors.warn : AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBg,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.chevron_right, size: 20, color: AppColors.primary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(height: 1, color: AppColors.borderLight),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _buildUsageStat('$generateTotal', '生成'),
+                _buildUsageStat('$polishTotal', '精修'),
+                _buildUsageStat('$translateTotal', '翻译'),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildQuotaItem(String value, String label, Color color, Color bgColor, {VoidCallback? onTap}) {
+  Widget _buildUsageStat(String value, String label) {
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          child: Column(
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
+      child: Column(
+        children: [
+          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.text)),
+          const SizedBox(height: 2),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
+        ],
       ),
     );
   }
