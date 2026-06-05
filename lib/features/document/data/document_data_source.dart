@@ -149,6 +149,24 @@ class DocumentDataSource {
     return data['code'] == 200;
   }
 
+  /// 获取文档预览 HTML（独立 Dio 实例，绕过业务拦截器）
+  Future<String> fetchPreviewHtml(int docId) async {
+    final mainDio = ApiClient.instance.dio;
+    final dio = Dio(BaseOptions(
+      baseUrl: mainDio.options.baseUrl,
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {
+        'Authorization': mainDio.options.headers['Authorization'],
+      },
+    ));
+    final response = await dio.get<String>(
+      '/preview/$docId/html',
+      options: Options(responseType: ResponseType.plain),
+    );
+    return response.data ?? '';
+  }
+
   /// 导出 Word
   Future<List<int>> exportWord(int docId) async {
     final dio = ApiClient.instance.dio;

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:go_router/go_router.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -26,6 +28,13 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
   bool _webViewLoading = true;
   bool _webViewError = false;
   bool _initialized = false;
+  String? _htmlContent;
+  bool _htmlLoading = false;
+
+  bool get _useWebView =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   @override
   void initState() {
@@ -35,7 +44,11 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
       final state = ref.read(documentDetailProvider(widget.docId));
       final doc = state.document;
       if (doc != null && doc.status == DocStatus.completed) {
-        _initWebView();
+        if (_useWebView) {
+          _initWebView();
+        } else {
+          _loadHtmlContent();
+        }
       }
     });
   }
@@ -48,9 +61,12 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
     ref.listen(documentDetailProvider(widget.docId), (prev, next) {
       final d = next.document;
       if (d == null) return;
-      // 完成时初始化 WebView
-      if (d.status == DocStatus.completed && _webViewController == null) {
-        _initWebView();
+      if (d.status == DocStatus.completed) {
+        if (_useWebView) {
+          if (_webViewController == null) _initWebView();
+        } else {
+          if (_htmlContent == null && !_htmlLoading) _loadHtmlContent();
+        }
       }
     });
 
@@ -211,6 +227,56 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
   }
 
   Widget _buildWebViewContent() {
+    if (_useWebView) {
+      return _buildNativeWebView();
+    }
+    return _buildHtmlWidget();
+  }
+
+  Widget _buildHtmlWidget() {
+    if (_htmlLoading || _htmlContent == null && !_webViewError) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(strokeWidth: 2),
+            SizedBox(height: 12),
+            Text('正在加载预览...', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+          ],
+        ),
+      );
+    }
+    if (_webViewError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: AppColors.textMuted),
+            const SizedBox(height: 12),
+            const Text('预览加载失败', style: TextStyle(fontSize: 14, color: AppColors.textMuted)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                setState(() { _webViewError = false; });
+                _loadHtmlContent();
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              child: const Text('重试'),
+            ),
+          ],
+        ),
+      );
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: HtmlWidget(
+        _htmlContent!,
+        textStyle: const TextStyle(fontSize: 15, height: 1.8, color: AppColors.text),
+      ),
+    );
+  }
+
+  Widget _buildNativeWebView() {
     if (_webViewController == null) {
       return const Center(
         child: Column(
@@ -241,10 +307,7 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
                     setState(() { _webViewError = false; _webViewLoading = true; });
                     _initWebView();
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                   child: const Text('重试'),
                 ),
               ],
@@ -254,6 +317,23 @@ class _DocumentDetailPageState extends ConsumerState<DocumentDetailPage> {
           const Center(child: CircularProgressIndicator()),
       ],
     );
+  }
+
+  Future<void> _loadHtmlContent() async {
+    if (_htmlContent != null || _htmlLoading) return;
+    setState(() { _htmlLoading = true; _webViewError = false; });
+    try {
+      final html = await DocumentDataSource().fetchPreviewHtml(widget.docId);
+      if (!mounted) return;
+      if (html.isEmpty) {
+        setState(() { _htmlLoading = false; _webViewError = true; });
+        return;
+      }
+      setState(() { _htmlContent = html; _htmlLoading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _htmlLoading = false; _webViewError = true; });
+    }
   }
 
   // SECURITY DEBT: token 通过 URL query 参数传递，会被 WebView 缓存和服务器 access log 记录。
