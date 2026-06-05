@@ -121,7 +121,7 @@ class _DocForgeAppState extends ConsumerState<DocForgeApp>
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
-      title: '稿搭子',
+      title: '文档工坊',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

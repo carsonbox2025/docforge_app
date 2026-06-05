@@ -119,7 +119,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
               child: const Icon(Icons.waving_hand_rounded, color: Colors.white, size: 24),
             ),
             const SizedBox(height: AppSpacing.lg),
-            const Text('欢迎加入稿搭子',
+            const Text('欢迎加入文档工坊',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
             const SizedBox(height: 4),
             Text('完善个人信息，开启你的智能文档之旅',

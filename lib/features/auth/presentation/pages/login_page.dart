@@ -191,7 +191,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ),
         ),
         const SizedBox(height: 16),
-        const Text('稿搭子',
+        const Text('文档工坊',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
         const SizedBox(height: 6),
         const Text('AI 驱动的专业文档生成平台',

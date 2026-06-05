@@ -12,7 +12,7 @@ void main() {
       await tester.pumpWidget(buildApp());
       await tester.pumpAndSettle();
 
-      expect(find.text('稿搭子'), findsOneWidget);
+      expect(find.text('文档工坊'), findsOneWidget);
       expect(find.text('登录 / 注册'), findsOneWidget);
     });
 
@@ -34,7 +34,7 @@ void main() {
       await tester.tap(find.text('登录 / 注册'));
       await tester.pumpAndSettle();
 
-      expect(find.text('稿搭子'), findsOneWidget);
+      expect(find.text('文档工坊'), findsOneWidget);
     });
   });
 

@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 class AppConstants {
   AppConstants._();
 
-  static const String appName = '稿搭子';
+  static const String appName = '文档工坊';
   static const String appSlogan = '智能文档工坊';
   static const String appKey = 'docforge';
   static const String appVersion = '1.0.1';
