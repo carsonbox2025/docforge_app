@@ -91,7 +91,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               const SizedBox(height: 20),
               const Text('创建账号', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
-              const Text('注册后即可使用文档工坊的全部功能', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+              const Text('注册后即可使用文稿工坊的全部功能', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
               const SizedBox(height: 32),
 
               const Text('用户名', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),

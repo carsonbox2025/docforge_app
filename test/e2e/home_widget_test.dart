@@ -27,8 +27,8 @@ void main() {
       await tester.pumpWidget(buildTestWidget(const HomePage()));
       await tester.pumpAndSettle();
 
-      expect(find.text('文档工坊'), findsOneWidget);
-      expect(find.text('智能文档工坊'), findsOneWidget);
+      expect(find.text('文稿工坊'), findsOneWidget);
+      expect(find.text('智能文稿工坊'), findsOneWidget);
       expect(find.text('文章撰写'), findsOneWidget);
       expect(find.text('精修排版'), findsOneWidget);
       expect(find.text('多语翻译'), findsOneWidget);

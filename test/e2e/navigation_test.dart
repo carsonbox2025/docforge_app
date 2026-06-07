@@ -11,7 +11,7 @@ void main() {
       await tester.pumpWidget(buildApp());
       await tester.pumpAndSettle();
 
-      expect(find.text('文档工坊'), findsOneWidget);
+      expect(find.text('文稿工坊'), findsOneWidget);
     });
   });
 }

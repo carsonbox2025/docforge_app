@@ -218,7 +218,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage>
                 child: const Icon(Icons.bolt, color: Colors.white, size: 16),
               ),
               const SizedBox(width: 8),
-              const Text('文档工坊',
+              const Text('文稿工坊',
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -15,6 +16,13 @@ class AboutPage extends StatefulWidget {
 
 class _AboutPageState extends State<AboutPage> {
   String _version = '';
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   void initState() {
@@ -107,6 +115,18 @@ class _AboutPageState extends State<AboutPage> {
             Text(
               '© 2026 ${AppConstants.appName} All Rights Reserved',
               style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => _launchUrl('https://beian.miit.gov.cn/'),
+              child: const Text(
+                '粤ICP备2026071158号',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
             ),
             const SizedBox(height: 32),
           ],
