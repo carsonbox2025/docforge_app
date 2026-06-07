@@ -4,6 +4,15 @@ import '../../../../core/iap/payment_logger.dart';
 import '../../../../core/network/api_client.dart';
 import 'models/payment_models.dart';
 
+/// restore API 的结构化响应
+class RestoreResult {
+  final List<OrderRecord> orders;
+  final int restored;
+  final int failed;
+
+  const RestoreResult({this.orders = const [], this.restored = 0, this.failed = 0});
+}
+
 /// 支付 API 数据源 — 对接统一支付模块
 class PaymentDataSource {
   final Dio _dio = ApiClient.instance.dio;
@@ -110,19 +119,37 @@ class PaymentDataSource {
   }
 
   /// 恢复购买（非消耗品/订阅）
-  Future<List<OrderRecord>> restorePurchases() async {
+  Future<RestoreResult> restorePurchases() async {
     final response = await _dio.post(
       AppConstants.paymentRestoreUrl,
       data: {'app_key': AppConstants.appKey},
     );
     final data = response.data['data'];
+    if (data is Map<String, dynamic>) {
+      final orders = (data['orders'] as List?)
+              ?.cast<Map<String, dynamic>>()
+              .map((m) => OrderRecord.fromJson(m))
+              .toList() ??
+          [];
+      return RestoreResult(
+        orders: orders,
+        restored: data['restored'] as int? ?? 0,
+        failed: data['failed'] as int? ?? 0,
+      );
+    }
+    // 兼容旧版后端返回 List
     if (data is List) {
-      return data
+      final orders = data
           .cast<Map<String, dynamic>>()
           .map((m) => OrderRecord.fromJson(m))
           .toList();
+      return RestoreResult(
+        orders: orders,
+        restored: orders.where((o) => o.isPaid).length,
+        failed: 0,
+      );
     }
-    return [];
+    return const RestoreResult();
   }
 
   /// 获取当前用户配额

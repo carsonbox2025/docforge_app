@@ -627,19 +627,41 @@ class _PayWallState extends ConsumerState<PayWall>
       // 1. 处理本地未发送成功的掉单队列
       await IapReceiptQueue.instance.processPendingQueue();
       // 2. 从服务端检索已购买的非消耗品和有效订阅
-      await ref.read(paymentProvider.notifier).restorePurchases();
+      final result = await ref.read(paymentProvider.notifier).restorePurchases();
       // 3. 刷新配额状态
       await LocalCache.instance.delete('user_quota');
       ref.invalidate(quotaProvider);
 
       if (mounted) {
         Navigator.of(context).pop(); // 关闭 loading 框
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('购买状态恢复成功！已同步最新配额'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+
+        if (result.restored > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('购买状态恢复成功！已恢复 ${result.restored} 笔订单'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        } else if (result.failed > 0) {
+          // 后端有订单但验票失败 — 显示具体原因
+          final firstError = result.orders
+              .where((o) => o.error != null && o.error!.isNotEmpty)
+              .firstOrNull?.error ?? '验票失败';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('恢复失败：$firstError'),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('未找到可恢复的购买记录'),
+              backgroundColor: AppColors.warn,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

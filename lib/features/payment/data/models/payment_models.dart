@@ -101,6 +101,7 @@ class OrderRecord {
   final Map<String, String>? payParams;
   final String? paidAt;
   final String? createdAt;
+  final String? error;
 
   const OrderRecord({
     required this.orderNo,
@@ -113,6 +114,7 @@ class OrderRecord {
     this.payParams,
     this.paidAt,
     this.createdAt,
+    this.error,
   });
 
   factory OrderRecord.fromJson(Map<String, dynamic> json) => OrderRecord(
@@ -127,6 +129,7 @@ class OrderRecord {
             ?.map((k, v) => MapEntry(k, v.toString())),
         paidAt: json['paid_at'] as String?,
         createdAt: json['created_at'] as String?,
+        error: json['error'] as String?,
       );
 
   String get displayAmount =>

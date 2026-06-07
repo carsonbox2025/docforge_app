@@ -257,7 +257,7 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   }
 
   /// 恢复购买
-  Future<List<OrderRecord>> restorePurchases() async {
+  Future<RestoreResult> restorePurchases() async {
     return _ds.restorePurchases();
   }
 

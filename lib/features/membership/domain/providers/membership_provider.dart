@@ -300,17 +300,24 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
     try {
       int restored = 0;
       int verifying = 0;
+      List<String> errorDetails = [];
 
       // 1. 先处理本地防掉单队列
       await IapReceiptQueue.instance.processPendingQueue();
 
       // 2. 查后端数据库已有订单
       final notifier = _ref.read(paymentProvider.notifier);
-      final serverOrders = await notifier.restorePurchases();
-      restored += serverOrders.where((o) => o.isPaid).length;
-      verifying += serverOrders.where((o) => o.isVerifying).length;
+      final result = await notifier.restorePurchases();
+      restored = result.restored;
+      verifying += result.orders.where((o) => o.isVerifying).length;
+      // 收集后端返回的错误详情
+      for (final o in result.orders) {
+        if (o.error != null && o.error!.isNotEmpty) {
+          errorDetails.add(o.error!);
+        }
+      }
 
-      // 3. 数据库没找到 → 从 HMS 服务器拉已购记录（按实际商品类型查询）
+      // 3. 后端有失败且无成功 → 从 HMS 服务器拉已购记录尝试恢复
       if (restored == 0 && verifying == 0 && state.isIap) {
         final iap = IapService();
         final log = PaymentLogger.instance;
@@ -359,7 +366,6 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
         }
 
         if (purchases.isEmpty && hmsError != null) {
-          // HMS 查询本身就失败了
           state = state.copyWith(
             isLoading: false,
             errorMessage: 'HMS 查询失败: $hmsError',
@@ -384,7 +390,6 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
             final verified = await _paymentDs.verifyOrder(order.orderNo, purchaseToken);
             if (verified.isPaid) {
               restored++;
-              // 消耗品需要 consume 闭环，否则华为侧保持"已拥有"
               try {
                 final iap = IapService();
                 if (verified.productType == 'consumable') {
@@ -398,6 +403,7 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
             }
           } catch (e) {
             debugPrint('[Membership] HMS 恢复验票失败: $e');
+            errorDetails.add(e.toString());
           }
         }
 
@@ -423,6 +429,13 @@ class MembershipNotifier extends StateNotifier<MembershipState> {
         state = state.copyWith(
           isLoading: false,
           successMessage: '发现 $verifying 笔待确认订单，系统正在自动处理中',
+        );
+      } else if (errorDetails.isNotEmpty) {
+        // 后端有订单但验票失败 — 显示具体原因
+        final firstError = errorDetails.first;
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: '恢复失败：$firstError',
         );
       } else {
         state = state.copyWith(
