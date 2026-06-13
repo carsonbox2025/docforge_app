@@ -9,6 +9,7 @@ import 'core/iap/channel_detector.dart';
 import 'core/iap/iap_receipt_queue.dart';
 import 'core/analytics/crash_reporter.dart';
 import 'core/analytics/analytics_service.dart';
+import 'core/update/app_update_service.dart';
 import 'features/auth/domain/providers/auth_provider.dart';
 import 'features/payment/data/payment_data_source.dart';
 import 'app/app.dart';
@@ -75,6 +76,10 @@ class _EagerInitState extends ConsumerState<_EagerInit> {
         if (mounted) {
           ref.read(authProvider.notifier).forceClearSession();
         }
+      });
+      // 启动后延迟 3 秒检查更新，避免干扰首屏渲染
+      Future.delayed(const Duration(seconds: 3), () {
+        AppUpdateService.instance.checkAndPrompt();
       });
     });
   }

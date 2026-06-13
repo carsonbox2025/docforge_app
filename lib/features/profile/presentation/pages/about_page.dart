@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/update/app_update_service.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -39,6 +40,29 @@ class _AboutPageState extends State<AboutPage> {
     } catch (_) {
       if (mounted) {
         setState(() => _version = AppConstants.appVersion);
+      }
+    }
+  }
+
+  Future<void> _checkUpdate() async {
+    try {
+      final info = await AppUpdateService.instance.checkUpdate();
+      if (!mounted) return;
+      if (!info.hasUpdate) {
+        final msg = info.error != null && info.error!.isNotEmpty
+            ? '检查更新失败: ${info.error}'
+            : '已是最新版本';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), duration: const Duration(seconds: 3)),
+        );
+        return;
+      }
+      await AppUpdateService.instance.performUpdate();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('检查更新失败: $e'), duration: const Duration(seconds: 2)),
+        );
       }
     }
   }
@@ -110,6 +134,11 @@ class _AboutPageState extends State<AboutPage> {
                   onTap: () => context.push('/legal/terms')),
               _InfoRow(Icons.privacy_tip_outlined, '隐私协议', null,
                   onTap: () => context.push('/legal/privacy')),
+            ]),
+            const SizedBox(height: 12),
+            _buildCard([
+              _InfoRow(Icons.system_update_outlined, '检查更新', null,
+                  onTap: _checkUpdate),
             ]),
             const SizedBox(height: 32),
             Text(

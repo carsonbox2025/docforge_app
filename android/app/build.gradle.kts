@@ -109,4 +109,6 @@ dependencies {
     // 华为 HMS IAP + AGConnect 初始化
     implementation("com.huawei.hms:iap:6.13.0.300")
     implementation("com.huawei.agconnect:agconnect-core:1.9.1.301")
+    // 华为 HMS 应用内更新 (AppGallery checkUpdate 审核必需)
+    implementation("com.huawei.hms:appservice:6.14.0.301")
 }

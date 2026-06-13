@@ -12,6 +12,11 @@
 -keep class com.huawei.hianalytics.** {*;}
 -keep class com.huawei.updatesdk.** {*;}
 
+# HMS App Update SDK (AppGallery checkUpdate 审核必需)
+-keep class com.huawei.hms.jos.** {*;}
+-keep class com.huawei.hms.plugin.** {*;}
+-keep class com.huawei.updatesdk.service.** {*;}
+
 # HMS optional runtime dependencies
 -dontwarn com.huawei.hms.iapfull.**
 -dontwarn com.huawei.hianalytics.**

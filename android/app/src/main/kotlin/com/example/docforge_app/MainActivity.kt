@@ -11,6 +11,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.docforge.app/iap"
     private var huaweiHandler: HuaweiIapHandler? = null
+    private var huaweiUpdateHandler: HuaweiUpdateHandler? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -58,6 +59,20 @@ class MainActivity : FlutterActivity() {
                             result.success(emptyList<Any>())
                         }
                     }
+                    "checkUpdate" -> {
+                        if (channel == "huawei") {
+                            getOrCreateUpdateHandler()?.checkUpdate(result)
+                        } else {
+                            result.success(mapOf("hasUpdate" to false))
+                        }
+                    }
+                    "performUpdate" -> {
+                        if (channel == "huawei") {
+                            getOrCreateUpdateHandler()?.performUpdate(result)
+                        } else {
+                            result.success(false)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -70,6 +85,17 @@ class MainActivity : FlutterActivity() {
             AGConnectInstance.initialize(applicationContext)
             huaweiHandler = HuaweiIapHandler(this)
             huaweiHandler
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun getOrCreateUpdateHandler(): HuaweiUpdateHandler? {
+        if (huaweiUpdateHandler != null) return huaweiUpdateHandler
+        return try {
+            AGConnectInstance.initialize(applicationContext)
+            huaweiUpdateHandler = HuaweiUpdateHandler(this)
+            huaweiUpdateHandler
         } catch (e: Exception) {
             null
         }
